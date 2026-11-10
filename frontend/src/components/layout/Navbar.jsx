@@ -3,9 +3,10 @@
 
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { Bell, LogOut, User } from 'lucide-react';
+import { LogOut, User } from 'lucide-react';
 import { getUser, removeToken } from '@/lib/auth';
 import ThemeToggle from '@/components/ui/ThemeToggle';
+import NotificationDropdown from './NotificationDropdown';
 
 export default function Navbar({ title = 'AmbulanceFinder' }) {
   const router = useRouter();
@@ -58,14 +59,8 @@ export default function Navbar({ title = 'AmbulanceFinder' }) {
           {/* Theme toggle */}
           <ThemeToggle />
 
-          {/* Notification */}
-          <button
-            className="relative p-2.5 rounded-xl transition-colors hover:bg-[var(--surface-2)]"
-            style={{ color: 'var(--on-surface-muted)' }}
-          >
-            <Bell size={18} />
-            <span className="absolute top-2 right-2 w-1.5 h-1.5 bg-primary-500 rounded-full ring-2 ring-[var(--nav-bg)]" />
-          </button>
+          {/* Notification Dropdown */}
+          <NotificationDropdown user={user} />
 
           {/* User info */}
           {user ? (

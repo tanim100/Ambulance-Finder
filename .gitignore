@@ -13,6 +13,10 @@
 Thumbs.db
 Thumbs.db:encryptable
 ehthumbs.db
+
+# Local MySQL Data
+mysql_data/
+
 ehthumbs_vista.db
 *.stackdump
 [Dd]esktop.ini
