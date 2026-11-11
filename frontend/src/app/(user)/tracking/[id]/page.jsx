@@ -1,238 +1,316 @@
-'use client';
 // src/app/(user)/tracking/[id]/page.jsx
-
+'use client';
 import { useState, useEffect, useRef } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import dynamic from 'next/dynamic';
-import { Phone, Star, XCircle, ChevronLeft, RefreshCw } from 'lucide-react';
-import Navbar from '@/components/layout/Navbar';
-import BottomNav from '@/components/layout/BottomNav';
-import Badge from '@/components/ui/Badge';
-import Button from '@/components/ui/Button';
-import Card from '@/components/ui/Card';
-import { bookingAPI } from '@/lib/api';
-import { useSocket } from '@/hooks/useSocket';
+import Link from 'next/link';
+import axios from 'axios';
+import io from 'socket.io-client';
 
-const MapView = dynamic(() => import('@/components/map/MapView'), {
-  ssr: false,
-  loading: () => (
-    <div className="w-full h-full bg-gray-100 rounded-2xl flex items-center justify-center">
-      <p className="text-sm text-gray-500">Loading map...</p>
-    </div>
-  ),
-});
+// Leaflet map — no SSR
+const MapComponent = dynamic(() => import('@/components/map/MapComponent'), { ssr: false });
 
-const STATUSES = ['Pending', 'Accepted', 'En Route', 'Arrived', 'Completed'];
+const STATUS_STEPS = ['Pending', 'Accepted', 'En Route', 'Arrived', 'Completed'];
 
 const MOCK_BOOKING = {
-  _id: 'demo-001',
+  id: 'MOCK-001',
   status: 'En Route',
-  patientName: 'John Doe',
-  emergencyType: 'Cardiac',
-  pickupLocation: 'House 12, Road 5, Dhanmondi, Dhaka',
-  destination: 'Dhaka Medical College',
-  ambulanceType: 'Advanced',
-  driver: { name: 'Rahim Ahmed', phone: '+880 1700-000000', rating: 4.8, vehicleNumber: 'AMB-002' },
-  eta: '8 min',
-  userLocation: { lat: 23.8103, lng: 90.4125 },
-  driverLocation: { lat: 23.8203, lng: 90.4225 },
+  pickup_lat: 23.8103,
+  pickup_lng: 90.4125,
+  driver: {
+    name: 'Rahim Ahmed',
+    phone: '+880-1711-000111',
+    rating: 4.8,
+    vehicle_number: 'DHA-AMB-4421',
+  },
+  eta: '4 min',
 };
 
 export default function TrackingPage() {
   const { id } = useParams();
   const router = useRouter();
-  const { on, off } = useSocket();
-  const [booking, setBooking] = useState(MOCK_BOOKING);
-  const [driverLoc, setDriverLoc] = useState(MOCK_BOOKING.driverLocation);
+
+  const [booking, setBooking] = useState(null);
+  const [driverPos, setDriverPos] = useState(null);
   const [loading, setLoading] = useState(true);
   const [cancelling, setCancelling] = useState(false);
+  const socketRef = useRef(null);
+  const intervalRef = useRef(null);
 
+  // ── Load booking ──
   useEffect(() => {
-    const fetchBooking = async () => {
+    const token = localStorage.getItem('token');
+
+    const loadBooking = async () => {
       try {
-        const res = await bookingAPI.getById(id);
-        setBooking(res.data);
-        if (res.data.driverLocation) setDriverLoc(res.data.driverLocation);
+        const { data } = await axios.get(
+          `${process.env.NEXT_PUBLIC_API_URL}/api/bookings/${id}`,
+          { headers: { Authorization: `Bearer ${token}` } }
+        );
+        const b = data?.data || data;
+        setBooking(b);
+        setDriverPos({ lat: b.pickup_lat - 0.012, lng: b.pickup_lng + 0.008 });
       } catch {
-        // keep mock data
+        // Fall back to mock data for demo
+        setBooking(MOCK_BOOKING);
+        setDriverPos({ lat: MOCK_BOOKING.pickup_lat - 0.012, lng: MOCK_BOOKING.pickup_lng + 0.008 });
       } finally {
         setLoading(false);
       }
     };
-    fetchBooking();
+
+    loadBooking();
   }, [id]);
 
-  // Socket listeners
+  // ── Socket.io real-time ──
   useEffect(() => {
-    const handleLocation = (data) => setDriverLoc(data);
-    const handleStatus = (data) => setBooking((b) => ({ ...b, status: data.status }));
+    if (!booking) return;
+    const token = localStorage.getItem('token');
 
-    on(`booking:${id}:location`, handleLocation);
-    on(`booking:${id}:status`, handleStatus);
+    try {
+      socketRef.current = io(process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000', {
+        auth: { token },
+        transports: ['websocket'],
+      });
 
-    // Simulate driver moving for demo
-    const interval = setInterval(() => {
-      setDriverLoc((prev) => prev ? ({
-        lat: prev.lat + (Math.random() - 0.5) * 0.001,
-        lng: prev.lng + (Math.random() - 0.5) * 0.001,
-      }) : prev);
+      socketRef.current.emit('join_booking', id);
+
+      socketRef.current.on('location_update', ({ lat, lng }) => {
+        setDriverPos({ lat, lng });
+      });
+
+      socketRef.current.on('booking_status_update', ({ status }) => {
+        setBooking((prev) => ({ ...prev, status }));
+      });
+    } catch {
+      // Socket not available — use simulated movement
+    }
+
+    // Simulate driver movement every 3 s
+    intervalRef.current = setInterval(() => {
+      setDriverPos((prev) => {
+        if (!prev) return prev;
+        return {
+          lat: prev.lat + (Math.random() - 0.3) * 0.0008,
+          lng: prev.lng + (Math.random() + 0.1) * 0.0006,
+        };
+      });
     }, 3000);
 
     return () => {
-      off(`booking:${id}:location`, handleLocation);
-      off(`booking:${id}:status`, handleStatus);
-      clearInterval(interval);
+      socketRef.current?.disconnect();
+      clearInterval(intervalRef.current);
     };
-  }, [id, on, off]);
+  }, [booking, id]);
 
+  // ── Cancel booking ──
   const handleCancel = async () => {
-    if (!confirm('Are you sure you want to cancel this booking?')) return;
+    if (!confirm('Cancel this ambulance request?')) return;
     setCancelling(true);
     try {
-      await bookingAPI.cancel(id);
-      setBooking((b) => ({ ...b, status: 'Cancelled' }));
+      const token = localStorage.getItem('token');
+      await axios.patch(
+        `${process.env.NEXT_PUBLIC_API_URL}/api/bookings/${id}/cancel`,
+        {},
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      router.push('/user/dashboard');
     } catch {
-      setBooking((b) => ({ ...b, status: 'Cancelled' }));
-    } finally {
+      alert('Could not cancel. Please try again.');
       setCancelling(false);
     }
   };
 
-  const currentStatusIndex = STATUSES.findIndex(
-    (s) => s.toLowerCase() === booking?.status?.toLowerCase().replace('_', ' ')
-  );
-
-  const route = driverLoc && booking?.userLocation
-    ? [[driverLoc.lat, driverLoc.lng], [booking.userLocation.lat, booking.userLocation.lng]]
-    : null;
-
-  return (
-    <div className="flex flex-col h-screen bg-gray-50">
-      <Navbar />
-
-      {/* Back button */}
-      <div className="bg-white border-b border-gray-100 px-4 py-3 flex items-center gap-3">
-        <button onClick={() => router.back()} className="p-1.5 rounded-lg hover:bg-gray-100">
-          <ChevronLeft size={20} className="text-gray-600" />
-        </button>
-        <div>
-          <h1 className="font-bold text-gray-900">Live Tracking</h1>
-          <p className="text-xs text-gray-500">#{id?.slice(0, 12)}...</p>
-        </div>
-        <div className="ml-auto">
-          <Badge status={booking?.status?.toLowerCase()} label={booking?.status} />
+  if (loading) {
+    return (
+      <div
+        className="flex items-center justify-center min-h-screen"
+        style={{ background: 'var(--bg)', color: 'var(--on-surface)' }}
+      >
+        <div className="text-center">
+          <div
+            className="mx-auto mb-4"
+            style={{
+              width: '48px', height: '48px', border: '3px solid var(--border)',
+              borderTopColor: 'var(--primary)', borderRadius: '50%',
+              animation: 'spin 0.8s linear infinite',
+            }}
+          />
+          <p style={{ color: 'var(--on-surface-muted)' }}>Loading tracking info…</p>
         </div>
       </div>
+    );
+  }
 
-      <div className="flex-1 overflow-y-auto pb-24">
-        {/* Map */}
-        <div className="h-64 mx-4 mt-4 rounded-2xl overflow-hidden shadow-sm">
-          <MapView
-            center={booking?.userLocation ? [booking.userLocation.lat, booking.userLocation.lng] : [23.8103, 90.4125]}
-            userLocation={booking?.userLocation}
-            driverLocation={driverLoc}
-            route={route}
-            height="100%"
+  const currentStep = STATUS_STEPS.indexOf(booking?.status ?? 'Pending');
+
+  return (
+    <div className="min-h-screen" style={{ background: 'var(--bg)', color: 'var(--on-surface)' }}>
+
+      {/* ── Top Bar ── */}
+      <header
+        style={{
+          position: 'sticky', top: 0, zIndex: 50,
+          background: 'var(--nav-bg)', backdropFilter: 'blur(12px)',
+          borderBottom: '1px solid var(--border)',
+          padding: '14px 24px',
+          display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+        }}
+      >
+        <Link href="/user/dashboard" style={{ textDecoration: 'none', color: 'var(--on-surface-muted)', fontSize: '0.9rem' }}>
+          ← Back to Dashboard
+        </Link>
+        <span style={{ fontWeight: 700, fontSize: '1rem' }}>🚑 Live Tracking</span>
+        <span
+          style={{
+            fontSize: '0.78rem', fontWeight: 600, padding: '4px 10px',
+            borderRadius: '999px',
+            background: booking?.status === 'Completed' ? '#dcfce7' : 'var(--primary-light)',
+            color: booking?.status === 'Completed' ? '#16a34a' : 'var(--primary)',
+          }}
+        >
+          {booking?.status || 'Unknown'}
+        </span>
+      </header>
+
+      <div className="max-w-5xl mx-auto px-4 py-6 grid gap-6" style={{ gridTemplateColumns: '1fr' }}>
+
+        {/* ── Map ── */}
+        <div
+          style={{
+            height: '400px', borderRadius: '16px', overflow: 'hidden',
+            border: '1px solid var(--border)', boxShadow: 'var(--shadow-md)',
+          }}
+        >
+          <MapComponent
+            pickupLat={booking?.pickup_lat ?? MOCK_BOOKING.pickup_lat}
+            pickupLng={booking?.pickup_lng ?? MOCK_BOOKING.pickup_lng}
+            driverLat={driverPos?.lat}
+            driverLng={driverPos?.lng}
           />
         </div>
 
-        <div className="px-4 py-4 space-y-4">
-          {/* ETA */}
-          <Card className="flex items-center justify-between">
-            <div>
-              <p className="text-xs text-gray-500">Estimated Arrival</p>
-              <p className="text-3xl font-black text-primary-600">{booking?.eta || '—'}</p>
-            </div>
-            <div className="text-right">
-              <p className="text-xs text-gray-500">Emergency Type</p>
-              <Badge status={booking?.emergencyType?.toLowerCase()} label={booking?.emergencyType} />
-            </div>
-          </Card>
+        {/* ── Bottom Cards ── */}
+        <div className="grid gap-4" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))' }}>
 
           {/* Status Timeline */}
-          <Card>
-            <h3 className="font-bold text-gray-900 mb-4">Status Updates</h3>
-            <div className="space-y-0">
-              {STATUSES.filter(s => s !== 'Completed').concat(['Completed']).map((status, idx) => {
-                const stepIdx = ['Pending','Accepted','En Route','Arrived','Completed'].indexOf(status);
-                const isDone = stepIdx < currentStatusIndex;
-                const isCurrent = stepIdx === currentStatusIndex;
-                const isPending = stepIdx > currentStatusIndex;
-
-                const icons = { Pending: '⏳', Accepted: '✅', 'En Route': '🚑', Arrived: '📍', Completed: '🎉' };
-
+          <div className="glass-panel p-6">
+            <h3 className="font-bold mb-5" style={{ fontSize: '1rem' }}>📋 Status Timeline</h3>
+            <div className="flex flex-col gap-3">
+              {STATUS_STEPS.map((step, i) => {
+                const done = i < currentStep;
+                const active = i === currentStep;
                 return (
-                  <div key={status} className="flex gap-3">
-                    {/* Timeline dot */}
-                    <div className="flex flex-col items-center">
-                      <div className={[
-                        'w-8 h-8 rounded-full flex items-center justify-center text-sm flex-shrink-0 mt-1',
-                        isDone ? 'bg-green-500 text-white' : isCurrent ? 'bg-primary-600 text-white ring-4 ring-primary-100' : 'bg-gray-100 text-gray-400',
-                      ].join(' ')}>
-                        {isDone ? '✓' : icons[status]}
-                      </div>
-                      {idx < STATUSES.length - 1 && (
-                        <div className={`w-0.5 h-6 mt-1 ${isDone ? 'bg-green-400' : 'bg-gray-200'}`} />
-                      )}
+                  <div key={step} className="flex items-center gap-3">
+                    <div
+                      style={{
+                        width: '28px', height: '28px', borderRadius: '50%', flexShrink: 0,
+                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        fontSize: '0.75rem', fontWeight: 700,
+                        background: done || active ? 'var(--primary)' : 'var(--surface-2, var(--border))',
+                        color: done || active ? '#fff' : 'var(--on-surface-subtle)',
+                        border: active ? '2px solid var(--primary)' : 'none',
+                        boxShadow: active ? '0 0 0 3px var(--primary-light)' : 'none',
+                      }}
+                    >
+                      {done ? '✓' : i + 1}
                     </div>
-                    {/* Label */}
-                    <div className="pb-4 pt-1">
-                      <p className={`text-sm font-semibold ${isCurrent ? 'text-primary-700' : isDone ? 'text-green-700' : 'text-gray-400'}`}>
-                        {status}
-                      </p>
-                      {isCurrent && (
-                        <p className="text-xs text-gray-500 mt-0.5">Current status</p>
-                      )}
-                    </div>
+                    <span
+                      style={{
+                        fontSize: '0.9rem',
+                        fontWeight: active ? 700 : 400,
+                        color: active ? 'var(--primary)' : done ? 'var(--on-surface)' : 'var(--on-surface-muted)',
+                      }}
+                    >
+                      {step}
+                    </span>
                   </div>
                 );
               })}
             </div>
-          </Card>
+          </div>
 
           {/* Driver Info */}
-          {booking?.driver && (
-            <Card>
-              <h3 className="font-bold text-gray-900 mb-3">Your Driver</h3>
-              <div className="flex items-center gap-4">
-                <div className="w-14 h-14 rounded-2xl bg-primary-100 flex items-center justify-center text-2xl font-bold text-primary-700 flex-shrink-0">
-                  {booking.driver.name?.charAt(0) || 'D'}
-                </div>
-                <div className="flex-1">
-                  <p className="font-bold text-gray-900">{booking.driver.name}</p>
-                  <p className="text-sm text-gray-500">{booking.driver.vehicleNumber}</p>
-                  <div className="flex items-center gap-1 mt-1">
-                    <Star size={12} className="text-yellow-500 fill-yellow-500" />
-                    <span className="text-xs text-gray-600 font-medium">{booking.driver.rating}</span>
+          <div className="glass-panel p-6">
+            <h3 className="font-bold mb-5" style={{ fontSize: '1rem' }}>🧑‍✈️ Driver Info</h3>
+            {booking?.driver ? (
+              <div className="flex flex-col gap-3">
+                <div className="flex items-center gap-3">
+                  <div
+                    style={{
+                      width: '52px', height: '52px', borderRadius: '50%',
+                      background: 'var(--primary-light)', color: 'var(--primary)',
+                      display: 'flex', alignItems: 'center', justifyContent: 'center',
+                      fontSize: '1.4rem',
+                    }}
+                  >
+                    👤
+                  </div>
+                  <div>
+                    <div className="font-bold" style={{ fontSize: '1rem' }}>{booking.driver.name}</div>
+                    <div style={{ fontSize: '0.82rem', color: 'var(--on-surface-muted)' }}>
+                      ⭐ {booking.driver.rating} · {booking.driver.vehicle_number}
+                    </div>
                   </div>
                 </div>
+
+                <div
+                  style={{
+                    padding: '10px 14px', borderRadius: '10px',
+                    background: 'var(--surface-2, var(--border-subtle, #f1f5f9))',
+                    fontSize: '0.88rem', color: 'var(--on-surface-muted)',
+                  }}
+                >
+                  📞 {booking.driver.phone}
+                </div>
+
+                {/* ETA */}
+                <div
+                  style={{
+                    padding: '12px 14px', borderRadius: '10px', textAlign: 'center',
+                    background: 'var(--primary-light)', color: 'var(--primary)',
+                    fontWeight: 700, fontSize: '1.1rem',
+                  }}
+                >
+                  ETA: {booking.eta || '~5 min'}
+                </div>
+
+                {/* Call button */}
                 <a
                   href={`tel:${booking.driver.phone}`}
-                  className="w-10 h-10 bg-green-500 rounded-xl flex items-center justify-center text-white hover:bg-green-600 transition-colors"
+                  className="btn-primary"
+                  style={{ textDecoration: 'none', justifyContent: 'center' }}
                 >
-                  <Phone size={18} />
+                  📞 Call Driver
                 </a>
               </div>
-            </Card>
-          )}
-
-          {/* Cancel button */}
-          {booking?.status === 'Pending' && (
-            <Button
-              variant="outline"
-              fullWidth
-              loading={cancelling}
-              onClick={handleCancel}
-              className="border-red-200 text-red-600 hover:bg-red-50"
-              leftIcon={<XCircle size={16} />}
-            >
-              Cancel Booking
-            </Button>
-          )}
+            ) : (
+              <p style={{ color: 'var(--on-surface-muted)', fontSize: '0.9rem' }}>
+                Waiting for a driver to accept…
+              </p>
+            )}
+          </div>
         </div>
+
+        {/* Cancel Button */}
+        {booking?.status === 'Pending' && (
+          <div className="flex justify-center">
+            <button
+              onClick={handleCancel}
+              disabled={cancelling}
+              className="btn-ghost"
+              style={{ color: 'var(--primary)', borderColor: 'var(--primary)', padding: '12px 32px' }}
+            >
+              {cancelling ? 'Cancelling…' : '✕ Cancel Request'}
+            </button>
+          </div>
+        )}
+
       </div>
 
-      <BottomNav />
+      <style jsx global>{`
+        @keyframes spin { to { transform: rotate(360deg); } }
+      `}</style>
     </div>
   );
 }
