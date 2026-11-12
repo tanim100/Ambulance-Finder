@@ -107,7 +107,6 @@ const FAQS = [
 
 export default function LandingPage() {
   const [scrolled, setScrolled] = useState(false);
-  const [activeTab, setActiveTab] = useState('advanced');
   const [openFaq, setOpenFaq] = useState(null);
 
   useEffect(() => {
@@ -115,8 +114,6 @@ export default function LandingPage() {
     window.addEventListener('scroll', onScroll);
     return () => window.removeEventListener('scroll', onScroll);
   }, []);
-
-  const selectedFleet = AMBULANCE_FLEET.find((f) => f.id === activeTab) || AMBULANCE_FLEET[1];
 
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 selection:bg-rose-600 selection:text-white font-sans antialiased">
@@ -220,226 +217,81 @@ export default function LandingPage() {
         </div>
       </header>
 
-      {/* ── HERO SECTION: 2-COLUMN ENTERPRISE LAYOUT ── */}
-      <section className="relative overflow-hidden pt-10 pb-16 lg:py-20 border-b border-slate-200 dark:border-slate-800 bg-gradient-to-b from-white via-slate-50 to-slate-100 dark:from-slate-950 dark:via-slate-900 dark:to-slate-950">
+      {/* ── HERO SECTION ── */}
+      <section className="relative overflow-hidden pt-12 pb-20 lg:py-24 border-b border-slate-200 dark:border-slate-800 bg-gradient-to-b from-white via-slate-50 to-slate-100 dark:from-slate-950 dark:via-slate-900 dark:to-slate-950">
         {/* Ambient background glows */}
-        <div className="absolute top-10 left-1/4 w-96 h-96 bg-rose-500/10 rounded-full blur-3xl pointer-events-none -z-10" />
-        <div className="absolute top-20 right-1/4 w-96 h-96 bg-blue-500/10 rounded-full blur-3xl pointer-events-none -z-10" />
+        <div className="absolute top-10 left-1/2 -translate-x-1/2 w-[700px] h-[400px] bg-rose-500/10 rounded-full blur-3xl pointer-events-none -z-10" />
 
-        <div className="max-w-7xl mx-auto px-4 sm:px-6">
-          <div className="grid grid-cols-1 lg:grid-cols-12 gap-12 items-center">
+        <div className="max-w-5xl mx-auto px-4 sm:px-6 text-center space-y-7">
 
-            {/* Left Column: Authoritative Emergency Information */}
-            <div className="lg:col-span-7 space-y-6 text-left">
-
-              {/* DGHS / Official Trust Badge */}
-              <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-rose-50 dark:bg-rose-950/60 border border-rose-200 dark:border-rose-900/60 text-rose-700 dark:text-rose-300 text-xs font-bold shadow-xs">
-                <ShieldCheck size={16} className="text-rose-600 shrink-0" />
-                <span>Certified Emergency Medical Dispatch</span>
-                <span className="w-2 h-2 rounded-full bg-emerald-500 animate-ping ml-1" />
-              </div>
-
-              {/* Headline */}
-              <h1 className="text-4xl sm:text-5xl lg:text-6xl font-black text-slate-950 dark:text-white tracking-tight leading-[1.12]">
-                Emergency Help,{' '}
-                <span className="text-transparent bg-clip-text bg-gradient-to-r from-rose-600 via-rose-500 to-amber-600">
-                  Seconds Away.
-                </span>
-              </h1>
-
-              {/* Subtitle */}
-              <p className="text-base sm:text-lg text-slate-600 dark:text-slate-300 max-w-2xl leading-relaxed">
-                Connect with the nearest verified emergency ambulance in under 5 minutes.
-                Real-time GPS telemetry, certified paramedics on board, and direct triage routing to Bangladesh’s premier hospitals.
-              </p>
-
-              {/* CTAs */}
-              <div className="pt-2 flex flex-col sm:flex-row items-stretch sm:items-center gap-4">
-                <Link
-                  href="/request"
-                  className="flex items-center justify-center gap-3 bg-rose-600 hover:bg-rose-700 text-white font-extrabold text-base px-8 py-4 rounded-2xl shadow-xl shadow-rose-600/30 hover:shadow-2xl hover:shadow-rose-600/40 hover:-translate-y-0.5 active:translate-y-0 transition-all"
-                >
-                  <Siren size={20} className="animate-pulse" />
-                  <span>Request Emergency Ambulance</span>
-                  <ArrowRight size={18} />
-                </Link>
-
-                <Link
-                  href="/home"
-                  className="flex items-center justify-center gap-2 bg-white dark:bg-slate-900 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-800 dark:text-slate-200 border-2 border-slate-200 dark:border-slate-800 font-bold text-base px-6 py-4 rounded-2xl shadow-xs transition-all"
-                >
-                  <MapPin size={18} className="text-rose-600" />
-                  <span>View Nearby Map</span>
-                </Link>
-              </div>
-
-              {/* 3 Quick Value Badges */}
-              <div className="pt-6 border-t border-slate-200 dark:border-slate-800 grid grid-cols-3 gap-4">
-                <div className="space-y-1">
-                  <div className="flex items-center gap-1.5 text-xs font-extrabold text-slate-900 dark:text-white">
-                    <CheckCircle2 size={15} className="text-emerald-500 shrink-0" />
-                    <span>No Advance Pay</span>
-                  </div>
-                  <p className="text-[11px] text-slate-500 leading-tight">Pay safely after trip completion</p>
-                </div>
-
-                <div className="space-y-1">
-                  <div className="flex items-center gap-1.5 text-xs font-extrabold text-slate-900 dark:text-white">
-                    <CheckCircle2 size={15} className="text-emerald-500 shrink-0" />
-                    <span>Certified EMTs</span>
-                  </div>
-                  <p className="text-[11px] text-slate-500 leading-tight">Licensed life support crews</p>
-                </div>
-
-                <div className="space-y-1">
-                  <div className="flex items-center gap-1.5 text-xs font-extrabold text-slate-900 dark:text-white">
-                    <CheckCircle2 size={15} className="text-emerald-500 shrink-0" />
-                    <span>Live GPS Telemetry</span>
-                  </div>
-                  <p className="text-[11px] text-slate-500 leading-tight">Turn-by-turn live tracking</p>
-                </div>
-              </div>
-
-            </div>
-
-            {/* Right Column: Live Dispatch & Ambulance Simulation Card */}
-            <div className="lg:col-span-5">
-              <div className="bg-white dark:bg-slate-900 rounded-3xl border-2 border-slate-200 dark:border-slate-800 shadow-2xl overflow-hidden relative">
-
-                {/* Card Top Banner */}
-                <div className="bg-slate-950 text-white p-4 px-6 flex items-center justify-between border-b border-slate-800">
-                  <div className="flex items-center gap-2.5">
-                    <span className="relative flex h-3 w-3">
-                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
-                      <span className="relative inline-flex rounded-full h-3 w-3 bg-emerald-500" />
-                    </span>
-                    <div>
-                      <p className="text-xs font-bold text-white flex items-center gap-1.5">
-                        <Radio size={13} className="text-emerald-400" /> GPS Dispatch Radar
-                      </p>
-                      <p className="text-[10px] text-slate-400">Dhaka North &amp; South Coverage</p>
-                    </div>
-                  </div>
-                  <span className="text-[11px] font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 px-2.5 py-0.5 rounded-full">
-                    38 Nearby
-                  </span>
-                </div>
-
-                {/* Simulation Content */}
-                <div className="p-5 sm:p-6 space-y-4">
-
-                  {/* Route Bar */}
-                  <div className="bg-slate-50 dark:bg-slate-800/70 rounded-2xl p-4 border border-slate-200 dark:border-slate-700/80 space-y-3">
-                    <div className="flex items-center gap-3">
-                      <div className="w-7 h-7 rounded-full bg-emerald-100 dark:bg-emerald-950 text-emerald-600 flex items-center justify-center shrink-0">
-                        <div className="w-2.5 h-2.5 rounded-full bg-emerald-600" />
-                      </div>
-                      <div className="min-w-0 flex-1">
-                        <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Your Location</p>
-                        <p className="text-xs font-bold text-slate-800 dark:text-slate-200 truncate">
-                          Detected GPS · Mirpur 10 / Uttara Sector 3
-                        </p>
-                      </div>
-                      <span className="text-[10px] font-extrabold text-emerald-600 bg-emerald-50 dark:bg-emerald-950/60 px-2 py-0.5 rounded">
-                        Auto-detected
-                      </span>
-                    </div>
-
-                    <div className="ml-3.5 pl-3.5 border-l-2 border-dashed border-slate-300 dark:border-slate-600 py-0.5">
-                      <p className="text-[10px] text-slate-400 font-mono">Distance: 2.8 km · Estimated ETA: 4 mins</p>
-                    </div>
-
-                    <div className="flex items-center gap-3">
-                      <div className="w-7 h-7 rounded-full bg-rose-100 dark:bg-rose-950 text-rose-600 flex items-center justify-center shrink-0">
-                        <Hospital size={15} />
-                      </div>
-                      <div className="min-w-0 flex-1">
-                        <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Destination Hospital</p>
-                        <p className="text-xs font-bold text-slate-800 dark:text-slate-200 truncate">
-                          Square Hospital Emergency / Dhaka Medical
-                        </p>
-                      </div>
-                      <span className="text-[10px] font-extrabold text-rose-600 bg-rose-50 dark:bg-rose-950/60 px-2 py-0.5 rounded">
-                        ICU Ready
-                      </span>
-                    </div>
-                  </div>
-
-                  {/* Fleet Type Tabs */}
-                  <div>
-                    <div className="flex items-center justify-between mb-2">
-                      <label className="text-xs font-bold uppercase tracking-wider text-slate-500">
-                        Select Emergency Fleet
-                      </label>
-                      <span className="text-[11px] font-bold text-rose-600 dark:text-rose-400">
-                        Starting from {selectedFleet.baseFare}
-                      </span>
-                    </div>
-                    <div className="grid grid-cols-4 gap-1 p-1 bg-slate-100 dark:bg-slate-800 rounded-xl text-xs font-semibold">
-                      {AMBULANCE_FLEET.map((f) => (
-                        <button
-                          key={f.id}
-                          onClick={() => setActiveTab(f.id)}
-                          className={`py-2 px-1 rounded-lg text-center transition-all truncate text-[11px] ${
-                            activeTab === f.id
-                              ? 'bg-white dark:bg-slate-700 text-rose-600 dark:text-rose-400 shadow-sm font-bold'
-                              : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
-                          }`}
-                        >
-                          {f.name.split(' ')[0]}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-
-                  {/* Selected Unit Details */}
-                  <div className="border border-slate-200 dark:border-slate-800 rounded-2xl p-4 bg-white dark:bg-slate-900 space-y-3">
-                    <div className="flex items-start justify-between">
-                      <div>
-                        <span className={`text-[10px] font-extrabold px-2 py-0.5 rounded-full border ${selectedFleet.tagColor}`}>
-                          {selectedFleet.category}
-                        </span>
-                        <h4 className="font-extrabold text-slate-950 dark:text-white text-sm mt-1">
-                          {selectedFleet.name}
-                        </h4>
-                      </div>
-                      <div className="text-right">
-                        <span className="text-xs font-black text-emerald-600 dark:text-emerald-400 flex items-center gap-1 justify-end">
-                          <Clock size={12} /> {selectedFleet.eta}
-                        </span>
-                        <span className="text-[11px] text-slate-400 font-semibold">{selectedFleet.baseFare} base</span>
-                      </div>
-                    </div>
-
-                    <p className="text-xs text-slate-500 dark:text-slate-400 leading-relaxed">
-                      {selectedFleet.description}
-                    </p>
-
-                    <div className="grid grid-cols-2 gap-1.5 pt-1">
-                      {selectedFleet.specs.map((s) => (
-                        <div key={s} className="flex items-center gap-1.5 text-[11px] text-slate-700 dark:text-slate-300">
-                          <CheckCircle2 size={13} className="text-rose-500 shrink-0" />
-                          <span className="truncate">{s}</span>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-
-                  {/* Dispatch CTA */}
-                  <Link
-                    href="/request"
-                    className="w-full flex items-center justify-center gap-2 bg-gradient-to-r from-rose-600 to-rose-700 hover:from-rose-700 hover:to-rose-800 text-white font-extrabold text-sm py-3.5 rounded-xl shadow-md hover:shadow-lg transition-all"
-                  >
-                    <span>Instant Dispatch for This Unit</span>
-                    <ArrowRight size={16} />
-                  </Link>
-
-                </div>
-
-              </div>
-            </div>
-
+          {/* DGHS / Official Trust Badge */}
+          <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-rose-50 dark:bg-rose-950/60 border border-rose-200 dark:border-rose-900/60 text-rose-700 dark:text-rose-300 text-xs sm:text-sm font-bold shadow-xs">
+            <ShieldCheck size={17} className="text-rose-600 shrink-0" />
+            <span>Certified Emergency Medical Response Platform</span>
+            <span className="w-2 h-2 rounded-full bg-emerald-500 animate-ping ml-1" />
           </div>
+
+          {/* Headline */}
+          <h1 className="text-4xl sm:text-6xl lg:text-7xl font-black text-slate-950 dark:text-white tracking-tight leading-[1.12]">
+            Emergency Help,{' '}
+            <span className="text-transparent bg-clip-text bg-gradient-to-r from-rose-600 via-rose-500 to-amber-600">
+              Seconds Away.
+            </span>
+          </h1>
+
+          {/* Subtitle */}
+          <p className="text-base sm:text-xl text-slate-600 dark:text-slate-300 max-w-3xl mx-auto leading-relaxed">
+            Connect with the nearest verified emergency ambulance in under 5 minutes.
+            Real-time GPS tracking, certified paramedics on board, and direct triage routing to Bangladesh’s premier hospitals.
+          </p>
+
+          {/* CTAs */}
+          <div className="pt-3 flex flex-col sm:flex-row items-center justify-center gap-4">
+            <Link
+              href="/request"
+              className="w-full sm:w-auto flex items-center justify-center gap-3 bg-rose-600 hover:bg-rose-700 text-white font-extrabold text-base px-9 py-4 rounded-2xl shadow-xl shadow-rose-600/30 hover:shadow-2xl hover:shadow-rose-600/40 hover:-translate-y-0.5 active:translate-y-0 transition-all"
+            >
+              <Siren size={20} className="animate-pulse" />
+              <span>Request Emergency Ambulance</span>
+              <ArrowRight size={18} />
+            </Link>
+
+            <Link
+              href="/home"
+              className="w-full sm:w-auto flex items-center justify-center gap-2 bg-white dark:bg-slate-900 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-800 dark:text-slate-200 border-2 border-slate-200 dark:border-slate-800 font-bold text-base px-7 py-4 rounded-2xl shadow-xs transition-all"
+            >
+              <MapPin size={18} className="text-rose-600" />
+              <span>View Nearby Map</span>
+            </Link>
+          </div>
+
+          {/* 3 Quick Value Badges in centered cards */}
+          <div className="pt-8 border-t border-slate-200/80 dark:border-slate-800/80 max-w-3xl mx-auto grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <div className="p-4 rounded-2xl bg-white/70 dark:bg-slate-900/60 border border-slate-200/80 dark:border-slate-800 text-center space-y-1">
+              <div className="flex items-center justify-center gap-1.5 text-sm font-extrabold text-slate-950 dark:text-white">
+                <CheckCircle2 size={16} className="text-emerald-500 shrink-0" />
+                <span>No Advance Pay</span>
+              </div>
+              <p className="text-xs text-slate-500">Pay safely after trip completion</p>
+            </div>
+
+            <div className="p-4 rounded-2xl bg-white/70 dark:bg-slate-900/60 border border-slate-200/80 dark:border-slate-800 text-center space-y-1">
+              <div className="flex items-center justify-center gap-1.5 text-sm font-extrabold text-slate-950 dark:text-white">
+                <CheckCircle2 size={16} className="text-emerald-500 shrink-0" />
+                <span>Certified EMTs</span>
+              </div>
+              <p className="text-xs text-slate-500">Licensed life support crews</p>
+            </div>
+
+            <div className="p-4 rounded-2xl bg-white/70 dark:bg-slate-900/60 border border-slate-200/80 dark:border-slate-800 text-center space-y-1">
+              <div className="flex items-center justify-center gap-1.5 text-sm font-extrabold text-slate-950 dark:text-white">
+                <CheckCircle2 size={16} className="text-emerald-500 shrink-0" />
+                <span>Live GPS Telemetry</span>
+              </div>
+              <p className="text-xs text-slate-500">Turn-by-turn live tracking</p>
+            </div>
+          </div>
+
         </div>
       </section>
 
