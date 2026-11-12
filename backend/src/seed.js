@@ -2,10 +2,13 @@ require('dotenv').config();
 const connectDB = require('./config/db');
 const { User, Ambulance, Driver, Booking } = require('./models');
 
-const seedData = async () => {
+const seedData = async (exitOnComplete = true) => {
   try {
-    console.log('Connecting to MySQL and synchronizing database...');
-    await connectDB();
+    // Only connect if sequelize connection is not yet established
+    if (!connectDB.sequelize || !connectDB.sequelize.connectionManager) {
+      console.log('Connecting to MySQL and synchronizing database...');
+      await connectDB();
+    }
 
     console.log('Clearing existing data (if any)...');
     await Booking.destroy({ where: {} });
@@ -145,11 +148,19 @@ Default Demo Accounts:
 ════════════════════════════════════════════════════════════
     `);
 
-    process.exit(0);
+    if (exitOnComplete) {
+      process.exit(0);
+    }
   } catch (error) {
     console.error('❌ Error during database seeding:', error);
-    process.exit(1);
+    if (exitOnComplete) {
+      process.exit(1);
+    }
   }
 };
 
-seedData();
+if (require.main === module) {
+  seedData(true);
+}
+
+module.exports = seedData;

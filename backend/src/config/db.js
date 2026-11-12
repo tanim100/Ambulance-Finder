@@ -43,6 +43,15 @@ const connectDB = async () => {
     // Sync all tables (alter: true ensures columns are created/updated safely)
     await sequelize.sync({ alter: true });
     console.log('MySQL Database tables synchronized successfully.');
+
+    // Auto-seed default accounts (Admin, User, Driver) if database is newly initialized
+    const { User } = require('../models');
+    const userCount = await User.count();
+    if (userCount === 0) {
+      console.log('No existing users found in database. Auto-seeding default demo accounts (Admin, User, Driver)...');
+      const seedData = require('../seed');
+      await seedData(false);
+    }
   } catch (error) {
     console.error(`Error connecting to MySQL: ${error.message}`);
     process.exit(1);
