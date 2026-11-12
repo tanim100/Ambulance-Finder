@@ -71,7 +71,7 @@ export default function AdminDashboard() {
             bks.map((b) => ({
               _id: b.id ?? b._id,
               user: b.user?.name ?? b.user ?? '—',
-              driver: b.driver?.name ?? b.driver ?? '',
+              driver: b.driver?.user?.name ?? b.driver?.name ?? b.driver ?? '',
               emergencyType: b.emergencyType ?? '—',
               status: b.status ?? 'Pending',
               fare: b.fare ?? 0,

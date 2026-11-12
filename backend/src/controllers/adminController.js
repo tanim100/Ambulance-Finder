@@ -145,7 +145,13 @@ const getAllBookings = async (req, res, next) => {
       where,
       include: [
         { model: User, as: 'user', attributes: ['id', 'name', 'email', 'phone'] },
-        { model: Driver, as: 'driver', attributes: ['id', 'name', 'phone'], required: false },
+        {
+          model: Driver,
+          as: 'driver',
+          attributes: ['id', 'licenseNumber', 'rating'],
+          required: false,
+          include: [{ model: User, as: 'user', attributes: ['id', 'name', 'phone'] }],
+        },
         { model: Ambulance, as: 'ambulance', attributes: ['id', 'vehicleNumber', 'type'], required: false },
       ],
       limit: parsedLimit,
@@ -208,10 +214,11 @@ const getReports = async (req, res, next) => {
 
     // Top drivers by completed bookings
     const topDrivers = await sequelize.query(
-      `SELECT d.name, d.phone, COUNT(b.id) AS completed, COALESCE(SUM(b.fare),0) AS earned
+      `SELECT u.name, u.phone, COUNT(b.id) AS completed, COALESCE(SUM(b.fare),0) AS earned
        FROM Drivers d
+       JOIN Users u ON d.userId = u.id
        LEFT JOIN Bookings b ON b.driverId = d.id AND b.status = 'completed'
-       GROUP BY d.id, d.name, d.phone
+       GROUP BY d.id, u.name, u.phone
        ORDER BY completed DESC
        LIMIT 5`,
       { type: sequelize.QueryTypes.SELECT }
