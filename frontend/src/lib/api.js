@@ -8,7 +8,7 @@ const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api';
 
 const api = axios.create({
   baseURL: API_URL,
-  timeout: 15000,
+  timeout: 20000,
   headers: {
     'Content-Type': 'application/json',
   },
@@ -26,13 +26,13 @@ api.interceptors.request.use(
   (error) => Promise.reject(error)
 );
 
-// Response interceptor — handle 401 Unauthorized
+// Response interceptor — handle 401 Unauthorized safely without reload loops
 api.interceptors.response.use(
   (response) => response,
   (error) => {
     if (error.response?.status === 401) {
       removeToken();
-      if (typeof window !== 'undefined') {
+      if (typeof window !== 'undefined' && !window.location.pathname.includes('/login')) {
         window.location.href = '/login';
       }
     }

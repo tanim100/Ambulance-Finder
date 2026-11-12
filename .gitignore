@@ -17,6 +17,9 @@ ehthumbs.db
 # Local MySQL Data
 mysql_data/
 
+# Accidental nested repo clone
+Ambulance-Finder/
+
 ehthumbs_vista.db
 *.stackdump
 [Dd]esktop.ini

@@ -88,11 +88,15 @@ export default function LoginPage() {
         throw new Error('Authentication failed. Please try again.');
       }
     } catch (err) {
-      const msg = err.response?.data?.message || err.message;
-      if (msg === 'Invalid credentials' && ['admin@ambulance.com', 'user@ambulance.com', 'driver1@ambulance.com'].includes(data.email)) {
-        setApiError('Demo account not found in database. Run "npm run seed" in backend or check MySQL.');
+      if (err.code === 'ERR_NETWORK' || err.code === 'ECONNREFUSED' || err.message?.includes('Network Error')) {
+        setApiError('Network Error: Cannot connect to server. Ensure backend is running on port 5000 and MySQL is active.');
       } else {
-        setApiError(msg || 'Invalid email or password.');
+        const msg = err.response?.data?.message || err.message;
+        if (msg === 'Invalid credentials' && ['admin@ambulance.com', 'user@ambulance.com', 'driver1@ambulance.com'].includes(data.email)) {
+          setApiError('Demo account not found in database. Run "npm run seed" in backend or check MySQL.');
+        } else {
+          setApiError(msg || 'Invalid email or password.');
+        }
       }
     } finally {
       setLoading(false);

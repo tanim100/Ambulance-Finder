@@ -5,6 +5,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { getToken, setToken, removeToken, getUser, setUser, isLoggedIn } from '@/lib/auth';
 import { authAPI } from '@/lib/api';
+import { destroySocket } from '@/lib/socket';
 
 export function useAuth() {
   const router = useRouter();
@@ -31,7 +32,12 @@ export function useAuth() {
       setUserState(userData);
       return userData;
     } catch (err) {
-      const msg = err.response?.data?.message || 'Login failed. Please try again.';
+      let msg;
+      if (err.code === 'ERR_NETWORK' || err.code === 'ECONNREFUSED' || err.message?.includes('Network Error')) {
+        msg = 'Cannot connect to backend server. Make sure backend is running on port 5000.';
+      } else {
+        msg = err.response?.data?.message || 'Login failed. Please try again.';
+      }
       setError(msg);
       throw new Error(msg);
     } finally {
@@ -50,7 +56,12 @@ export function useAuth() {
       setUserState(userData);
       return userData;
     } catch (err) {
-      const msg = err.response?.data?.message || 'Registration failed. Please try again.';
+      let msg;
+      if (err.code === 'ERR_NETWORK' || err.code === 'ECONNREFUSED' || err.message?.includes('Network Error')) {
+        msg = 'Cannot connect to backend server. Make sure backend is running on port 5000.';
+      } else {
+        msg = err.response?.data?.message || 'Registration failed. Please try again.';
+      }
       setError(msg);
       throw new Error(msg);
     } finally {
@@ -59,6 +70,7 @@ export function useAuth() {
   }, []);
 
   const logout = useCallback(() => {
+    destroySocket();
     removeToken();
     setUserState(null);
     router.push('/login');

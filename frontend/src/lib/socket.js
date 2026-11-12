@@ -1,5 +1,5 @@
 // src/lib/socket.js
-// Socket.io client setup
+// Socket.io client setup with fresh token provider on reconnect & destroy helper
 
 import { io } from 'socket.io-client';
 import { getToken } from './auth';
@@ -11,13 +11,14 @@ let socket = null;
 export function getSocket() {
   if (!socket) {
     socket = io(SOCKET_URL, {
-      auth: {
-        token: getToken(),
+      auth: (cb) => {
+        cb({ token: getToken() });
       },
       autoConnect: false,
       reconnection: true,
       reconnectionDelay: 1000,
-      reconnectionAttempts: 5,
+      reconnectionAttempts: 10,
+      timeout: 20000,
     });
   }
   return socket;
@@ -34,6 +35,13 @@ export function connectSocket() {
 export function disconnectSocket() {
   if (socket && socket.connected) {
     socket.disconnect();
+  }
+}
+
+export function destroySocket() {
+  if (socket) {
+    socket.disconnect();
+    socket = null;
   }
 }
 

@@ -70,7 +70,7 @@ export default function DriverDashboard() {
     setActiveTrip(incomingRequest);
     setIncomingRequest(null);
     setAccepting(false);
-    router.push('/driver/active');
+    router.push('/active');
   };
 
   const handleReject = () => {
@@ -226,7 +226,7 @@ export default function DriverDashboard() {
             </div>
             <p className="font-semibold text-gray-900">{activeTrip.patientName}</p>
             <p className="text-xs text-gray-500 mt-1">{activeTrip.pickupLocation}</p>
-            <Link href="/driver/active" className="block mt-4">
+            <Link href="/active" className="block mt-4">
               <Button fullWidth>View Active Trip</Button>
             </Link>
           </Card>
