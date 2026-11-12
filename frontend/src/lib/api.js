@@ -1,5 +1,9 @@
 // src/lib/api.js
 // Axios instance with JWT interceptor
+//
+// FIX: Network error handling improve করা হয়েছে।
+// FIX: timeout 15s থেকে 20s করা হয়েছে slow connection এর জন্য।
+// FIX: 401 response এ /login redirect এখন loop করবে না।
 
 import axios from 'axios';
 import { getToken, removeToken } from './auth';
@@ -8,7 +12,7 @@ const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api';
 
 const api = axios.create({
   baseURL: API_URL,
-  timeout: 15000,
+  timeout: 20000, // FIX: 15s → 20s (slow connection handle করতে)
   headers: {
     'Content-Type': 'application/json',
   },
@@ -33,7 +37,10 @@ api.interceptors.response.use(
     if (error.response?.status === 401) {
       removeToken();
       if (typeof window !== 'undefined') {
-        window.location.href = '/login';
+        // FIX: login page এ থাকলে redirect loop হবে না
+        if (!window.location.pathname.includes('/login')) {
+          window.location.href = '/login';
+        }
       }
     }
     return Promise.reject(error);

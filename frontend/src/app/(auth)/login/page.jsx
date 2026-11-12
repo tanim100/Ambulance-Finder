@@ -88,7 +88,12 @@ export default function LoginPage() {
         throw new Error('Authentication failed. Please try again.');
       }
     } catch (err) {
-      setApiError(err.response?.data?.message || err.message || 'Invalid email or password.');
+      // FIX: Network error (backend না চললে) সুনির্দিষ্ট বাংলা/ইংরেজি error দেখাবে
+      if (err.code === 'ERR_NETWORK' || err.code === 'ECONNREFUSED' || err.message?.includes('Network Error')) {
+        setApiError('Server এর সাথে connect করা যাচ্ছে না। Backend (port 5000) চালু আছে কিনা দেখুন।');
+      } else {
+        setApiError(err.response?.data?.message || err.message || 'Invalid email or password.');
+      }
     } finally {
       setLoading(false);
     }
