@@ -50,9 +50,35 @@ export default function AdminDashboard() {
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const [statsRes, bookRes] = await Promise.all([adminAPI.getStats(), adminAPI.getBookings({ limit: 5 })]);
-        if (statsRes.data) setStats(statsRes.data);
-        if (bookRes.data?.bookings) setBookings(bookRes.data.bookings);
+        const [statsRes, bookRes] = await Promise.all([
+          adminAPI.getStats(),
+          adminAPI.getBookings({ limit: 5 }),
+        ]);
+        // Backend wraps stats inside data.stats
+        const s = statsRes.data?.data?.stats || statsRes.data?.data || statsRes.data;
+        if (s) {
+          setStats({
+            totalUsers: s.totalUsers ?? MOCK_STATS.totalUsers,
+            activeAmbulances: s.availableAmbulances ?? s.activeAmbulances ?? MOCK_STATS.activeAmbulances,
+            todayBookings: s.activeBookings ?? s.totalBookings ?? MOCK_STATS.todayBookings,
+            revenue: s.totalRevenue ?? MOCK_STATS.revenue,
+          });
+        }
+        // Backend wraps bookings inside data.bookings
+        const bks = bookRes.data?.data?.bookings || bookRes.data?.bookings;
+        if (bks?.length) {
+          setBookings(
+            bks.map((b) => ({
+              _id: b.id ?? b._id,
+              user: b.user?.name ?? b.user ?? '—',
+              driver: b.driver?.name ?? b.driver ?? '',
+              emergencyType: b.emergencyType ?? '—',
+              status: b.status ?? 'Pending',
+              fare: b.fare ?? 0,
+              createdAt: b.createdAt,
+            }))
+          );
+        }
       } catch {}
       setLoading(false);
     };
@@ -143,11 +169,12 @@ export default function AdminDashboard() {
           </div>
 
           {/* Quick action cards */}
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mt-6">
+          <div className="grid grid-cols-1 sm:grid-cols-4 gap-4 mt-6">
             {[
               { icon: '🚑', label: 'Manage Ambulances', href: '/admin/ambulances', color: 'bg-primary-50 border-primary-100' },
               { icon: '👤', label: 'Manage Drivers',    href: '/admin/drivers',    color: 'bg-blue-50 border-blue-100' },
               { icon: '📋', label: 'All Bookings',      href: '/admin/bookings',   color: 'bg-green-50 border-green-100' },
+              { icon: '📊', label: 'Reports',           href: '/admin/reports',    color: 'bg-purple-50 border-purple-100' },
             ].map(({ icon, label, href, color }) => (
               <Link
                 key={href}

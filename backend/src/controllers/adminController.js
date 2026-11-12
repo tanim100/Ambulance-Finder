@@ -127,9 +127,128 @@ const updateUserRole = async (req, res, next) => {
   }
 };
 
+/**
+ * GET /api/admin/bookings
+ * Paginated list of all bookings for admin
+ */
+const getAllBookings = async (req, res, next) => {
+  try {
+    const { status, page = 1, limit = 20 } = req.query;
+    const where = {};
+    if (status) where.status = status;
+
+    const parsedLimit = parseInt(limit, 10);
+    const parsedPage = parseInt(page, 10);
+    const offset = (parsedPage - 1) * parsedLimit;
+
+    const { count, rows: bookings } = await Booking.findAndCountAll({
+      where,
+      include: [
+        { model: User, as: 'user', attributes: ['id', 'name', 'email', 'phone'] },
+        { model: Driver, as: 'driver', attributes: ['id', 'name', 'phone'], required: false },
+        { model: Ambulance, as: 'ambulance', attributes: ['id', 'vehicleNumber', 'type'], required: false },
+      ],
+      limit: parsedLimit,
+      offset,
+      order: [['createdAt', 'DESC']],
+    });
+
+    return res.status(200).json({
+      success: true,
+      message: 'Bookings retrieved successfully',
+      data: {
+        bookings,
+        pagination: {
+          total: count,
+          page: parsedPage,
+          limit: parsedLimit,
+          pages: Math.ceil(count / parsedLimit),
+        },
+      },
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * GET /api/admin/reports
+ * Monthly booking trends, revenue summary, and type breakdown
+ */
+const getReports = async (req, res, next) => {
+  try {
+    const now = new Date();
+    const sixMonthsAgo = new Date(now.getFullYear(), now.getMonth() - 5, 1);
+
+    // Monthly booking counts by status (last 6 months)
+    const monthlyBookings = await sequelize.query(
+      `SELECT
+         DATE_FORMAT(createdAt, '%Y-%m') AS month,
+         status,
+         COUNT(*) AS count,
+         COALESCE(SUM(fare), 0) AS revenue
+       FROM Bookings
+       WHERE createdAt >= :from
+       GROUP BY month, status
+       ORDER BY month ASC`,
+      {
+        replacements: { from: sixMonthsAgo.toISOString().slice(0, 10) },
+        type: sequelize.QueryTypes.SELECT,
+      }
+    );
+
+    // Emergency type breakdown
+    const typeBreakdown = await sequelize.query(
+      `SELECT emergencyType, COUNT(*) AS count
+       FROM Bookings
+       GROUP BY emergencyType
+       ORDER BY count DESC`,
+      { type: sequelize.QueryTypes.SELECT }
+    );
+
+    // Top drivers by completed bookings
+    const topDrivers = await sequelize.query(
+      `SELECT d.name, d.phone, COUNT(b.id) AS completed, COALESCE(SUM(b.fare),0) AS earned
+       FROM Drivers d
+       LEFT JOIN Bookings b ON b.driverId = d.id AND b.status = 'completed'
+       GROUP BY d.id, d.name, d.phone
+       ORDER BY completed DESC
+       LIMIT 5`,
+      { type: sequelize.QueryTypes.SELECT }
+    );
+
+    // Overall totals
+    const [totals] = await sequelize.query(
+      `SELECT
+         COUNT(*) AS totalBookings,
+         COALESCE(SUM(CASE WHEN status='completed'  THEN 1 ELSE 0 END),0) AS completed,
+         COALESCE(SUM(CASE WHEN status='cancelled'  THEN 1 ELSE 0 END),0) AS cancelled,
+         COALESCE(SUM(CASE WHEN status='pending'    THEN 1 ELSE 0 END),0) AS pending,
+         COALESCE(SUM(CASE WHEN status='completed'  THEN fare ELSE 0 END),0) AS totalRevenue
+       FROM Bookings`,
+      { type: sequelize.QueryTypes.SELECT }
+    );
+
+    return res.status(200).json({
+      success: true,
+      message: 'Reports retrieved successfully',
+      data: {
+        monthlyBookings,
+        typeBreakdown,
+        topDrivers,
+        totals,
+      },
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
 module.exports = {
   getStats,
   getAllUsers,
   updateUserRole,
   updateUser: updateUserRole,
+  getAllBookings,
+  getReports,
 };

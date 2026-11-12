@@ -94,4 +94,6 @@ export const driverAPI = {
 export const adminAPI = {
   getStats: () => api.get('/admin/stats'),
   getBookings: (params) => api.get('/admin/bookings', { params }),
+  getUsers: (params) => api.get('/admin/users', { params }),
+  getReports: () => api.get('/admin/reports'),
 };
