@@ -1,16 +1,22 @@
 'use client';
-// src/components/layout/Navbar.jsx — Theme-Aware
+// src/components/layout/Navbar.jsx — Theme-Aware & Desktop Nav Enabled
 
+import { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
-import { LogOut, User } from 'lucide-react';
+import { useRouter, usePathname } from 'next/navigation';
+import { LogOut, User, Home, MapPin, PlusCircle, Clock } from 'lucide-react';
 import { getUser, removeToken } from '@/lib/auth';
 import ThemeToggle from '@/components/ui/ThemeToggle';
 import NotificationDropdown from './NotificationDropdown';
 
 export default function Navbar({ title = 'AmbulanceFinder' }) {
   const router = useRouter();
-  const user = typeof window !== 'undefined' ? getUser() : null;
+  const pathname = usePathname();
+  const [user, setUser] = useState(null);
+
+  useEffect(() => {
+    setUser(getUser());
+  }, []);
 
   const handleLogout = () => {
     removeToken();
@@ -37,12 +43,19 @@ export default function Navbar({ title = 'AmbulanceFinder' }) {
       }}
     >
       <div className="max-w-7xl mx-auto px-4 h-16 flex items-center justify-between gap-4">
-        {/* Logo */}
-        <Link href={user ? '/home' : '/'} className="flex items-center gap-2.5 group shrink-0 cursor-pointer" title="Home">
+        {/* Logo — Always navigates directly to Home page ('/') */}
+        <Link
+          href="/"
+          className="flex items-center gap-2.5 group shrink-0 cursor-pointer"
+          title="Go to Home Page"
+        >
           <div className="w-8 h-8 bg-primary-600 rounded-xl flex items-center justify-center text-base shadow-md group-hover:bg-primary-500 group-hover:scale-105 transition-all">
             🚑
           </div>
-          <span className="font-bold text-base tracking-tight hidden sm:block group-hover:opacity-85 transition-opacity" style={{ color: 'var(--on-surface)' }}>
+          <span
+            className="font-bold text-base tracking-tight hidden sm:block group-hover:opacity-85 transition-opacity"
+            style={{ color: 'var(--on-surface)' }}
+          >
             Ambulance<span className="text-primary-600 dark:text-primary-400">Finder</span>
           </span>
         </Link>
@@ -53,6 +66,97 @@ export default function Navbar({ title = 'AmbulanceFinder' }) {
             {title}
           </span>
         )}
+
+        {/* Navigation links for User Panel (Desktop) */}
+        <div className="hidden md:flex items-center gap-1.5 ml-4">
+          <Link
+            href="/"
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold transition-all ${
+              pathname === '/'
+                ? 'bg-primary-50 dark:bg-primary-950/40 text-primary-600 dark:text-primary-400 font-bold'
+                : 'text-[var(--on-surface-muted)] hover:text-[var(--on-surface)] hover:bg-[var(--surface-2)]'
+            }`}
+          >
+            <Home size={14} />
+            <span>Home</span>
+          </Link>
+
+          {(!user || user.role === 'user') && (
+            <>
+              <Link
+                href="/home"
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold transition-all ${
+                  pathname === '/home'
+                    ? 'bg-primary-50 dark:bg-primary-950/40 text-primary-600 dark:text-primary-400 font-bold'
+                    : 'text-[var(--on-surface-muted)] hover:text-[var(--on-surface)] hover:bg-[var(--surface-2)]'
+                }`}
+              >
+                <MapPin size={14} />
+                <span>Live Map</span>
+              </Link>
+              <Link
+                href="/request"
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold transition-all ${
+                  pathname === '/request'
+                    ? 'bg-primary-600 text-white shadow-sm shadow-primary-500/30'
+                    : 'text-[var(--on-surface-muted)] hover:text-[var(--on-surface)] hover:bg-[var(--surface-2)]'
+                }`}
+              >
+                <PlusCircle size={14} />
+                <span>Request</span>
+              </Link>
+              <Link
+                href="/history"
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold transition-all ${
+                  pathname === '/history'
+                    ? 'bg-primary-50 dark:bg-primary-950/40 text-primary-600 dark:text-primary-400 font-bold'
+                    : 'text-[var(--on-surface-muted)] hover:text-[var(--on-surface)] hover:bg-[var(--surface-2)]'
+                }`}
+              >
+                <Clock size={14} />
+                <span>History</span>
+              </Link>
+            </>
+          )}
+
+          {user?.role === 'driver' && (
+            <>
+              <Link
+                href="/dashboard"
+                className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition-all ${
+                  pathname === '/dashboard'
+                    ? 'bg-primary-50 dark:bg-primary-950/40 text-primary-600 dark:text-primary-400 font-bold'
+                    : 'text-[var(--on-surface-muted)] hover:text-[var(--on-surface)] hover:bg-[var(--surface-2)]'
+                }`}
+              >
+                Dashboard
+              </Link>
+              <Link
+                href="/active"
+                className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition-all ${
+                  pathname === '/active'
+                    ? 'bg-primary-50 dark:bg-primary-950/40 text-primary-600 dark:text-primary-400 font-bold'
+                    : 'text-[var(--on-surface-muted)] hover:text-[var(--on-surface)] hover:bg-[var(--surface-2)]'
+                }`}
+              >
+                Active Trip
+              </Link>
+            </>
+          )}
+
+          {user?.role === 'admin' && (
+            <Link
+              href="/admin"
+              className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition-all ${
+                pathname.startsWith('/admin')
+                  ? 'bg-primary-50 dark:bg-primary-950/40 text-primary-600 dark:text-primary-400 font-bold'
+                  : 'text-[var(--on-surface-muted)] hover:text-[var(--on-surface)] hover:bg-[var(--surface-2)]'
+              }`}
+            >
+              Admin Panel
+            </Link>
+          )}
+        </div>
 
         {/* Right side */}
         <div className="flex items-center gap-1 ml-auto">
