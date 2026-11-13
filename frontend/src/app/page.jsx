@@ -218,11 +218,27 @@ export default function LandingPage() {
       </header>
 
       {/* ── HERO SECTION ── */}
-      <section className="relative overflow-hidden pt-12 pb-20 lg:py-24 border-b border-slate-200 dark:border-slate-800 bg-gradient-to-b from-white via-slate-50 to-slate-100 dark:from-slate-950 dark:via-slate-900 dark:to-slate-950">
-        {/* Ambient background glows */}
-        <div className="absolute top-10 left-1/2 -translate-x-1/2 w-[700px] h-[400px] bg-rose-500/10 rounded-full blur-3xl pointer-events-none -z-10" />
+      <section className="relative overflow-hidden pt-12 pb-20 lg:py-24 border-b border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950">
+        
+        {/* Soft pink/rose radial ambient glow at top */}
+        <div
+          className="absolute pointer-events-none"
+          style={{
+            top: '-25%',
+            left: '50%',
+            transform: 'translateX(-50%)',
+            width: '1000px',
+            height: '750px',
+            borderRadius: '50%',
+            background: 'radial-gradient(ellipse at center, rgba(244, 63, 94, 0.16) 0%, rgba(254, 205, 211, 0.12) 40%, transparent 70%)',
+            filter: 'blur(35px)',
+          }}
+        />
 
-        <div className="max-w-5xl mx-auto px-4 sm:px-6 text-center space-y-7">
+        {/* Crisp grid pattern layer */}
+        <div className="absolute inset-0 bg-grid-pattern pointer-events-none opacity-85 dark:opacity-35" />
+
+        <div className="relative z-10 max-w-5xl mx-auto px-4 sm:px-6 text-center space-y-7">
 
           {/* DGHS / Official Trust Badge */}
           <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-rose-50 dark:bg-rose-950/60 border border-rose-200 dark:border-rose-900/60 text-rose-700 dark:text-rose-300 text-xs sm:text-sm font-bold shadow-xs">
