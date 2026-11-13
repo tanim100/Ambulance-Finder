@@ -6,6 +6,7 @@ import dynamic from 'next/dynamic';
 import Link from 'next/link';
 import axios from 'axios';
 import io from 'socket.io-client';
+import { subscribeToAmbulanceLocation } from '@/lib/firebaseTracking';
 
 // Leaflet map — no SSR
 const MapComponent = dynamic(() => import('@/components/map/MapComponent'), { ssr: false });
@@ -34,12 +35,19 @@ export default function TrackingPage() {
   const [driverPos, setDriverPos] = useState(null);
   const [loading, setLoading] = useState(true);
   const [cancelling, setCancelling] = useState(false);
+  const [liveStreamStatus, setLiveStreamStatus] = useState({
+    active: false,
+    source: 'Connecting...',
+    speed: null,
+    lastUpdated: null,
+  });
+
   const socketRef = useRef(null);
   const intervalRef = useRef(null);
 
   // ── Load booking ──
   useEffect(() => {
-    const token = localStorage.getItem('token');
+    const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
 
     const loadBooking = async () => {
       try {
@@ -62,11 +70,32 @@ export default function TrackingPage() {
     loadBooking();
   }, [id]);
 
-  // ── Socket.io real-time ──
+  // ── Firebase & Socket.io Real-time tracking ──
   useEffect(() => {
     if (!booking) return;
-    const token = localStorage.getItem('token');
+    const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
+    let hasLiveStream = false;
 
+    // 1. Subscribe to Firebase Realtime / Local cross-tab stream
+    const unsubscribeFirebase = subscribeToAmbulanceLocation(id, (liveData) => {
+      if (liveData?.lat && liveData?.lng) {
+        hasLiveStream = true;
+        setDriverPos({ lat: liveData.lat, lng: liveData.lng });
+        setLiveStreamStatus({
+          active: true,
+          source: liveData.source === 'firebase-rtdb' ? 'Firebase Realtime DB' :
+                  liveData.source === 'firebase-firestore' ? 'Firebase Firestore' : 'Live GPS Stream',
+          speed: liveData.speed,
+          lastUpdated: new Date(liveData.updatedAt || Date.now()).toLocaleTimeString(),
+        });
+
+        if (liveData.status) {
+          setBooking((prev) => (prev ? { ...prev, status: liveData.status } : prev));
+        }
+      }
+    });
+
+    // 2. Socket.io fallback
     try {
       socketRef.current = io(process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000', {
         auth: { token },
@@ -75,29 +104,39 @@ export default function TrackingPage() {
 
       socketRef.current.emit('join_booking', id);
 
-      socketRef.current.on('location_update', ({ lat, lng }) => {
+      socketRef.current.on('location_update', ({ lat, lng, speed }) => {
+        hasLiveStream = true;
         setDriverPos({ lat, lng });
+        setLiveStreamStatus({
+          active: true,
+          source: 'Socket.io Server',
+          speed: speed || 0,
+          lastUpdated: new Date().toLocaleTimeString(),
+        });
       });
 
       socketRef.current.on('booking_status_update', ({ status }) => {
         setBooking((prev) => ({ ...prev, status }));
       });
     } catch {
-      // Socket not available — use simulated movement
+      // Socket not available
     }
 
-    // Simulate driver movement every 3 s
+    // 3. Fallback gentle movement only when no live driver is actively transmitting
     intervalRef.current = setInterval(() => {
-      setDriverPos((prev) => {
-        if (!prev) return prev;
-        return {
-          lat: prev.lat + (Math.random() - 0.3) * 0.0008,
-          lng: prev.lng + (Math.random() + 0.1) * 0.0006,
-        };
-      });
+      if (!hasLiveStream) {
+        setDriverPos((prev) => {
+          if (!prev) return prev;
+          return {
+            lat: prev.lat + (Math.random() - 0.3) * 0.0006,
+            lng: prev.lng + (Math.random() + 0.1) * 0.0005,
+          };
+        });
+      }
     }, 3000);
 
     return () => {
+      unsubscribeFirebase();
       socketRef.current?.disconnect();
       clearInterval(intervalRef.current);
     };
@@ -160,7 +199,7 @@ export default function TrackingPage() {
         <Link href="/user/dashboard" style={{ textDecoration: 'none', color: 'var(--on-surface-muted)', fontSize: '0.9rem' }}>
           ← Back to Dashboard
         </Link>
-        <span style={{ fontWeight: 700, fontSize: '1rem' }}>🚑 Live Tracking</span>
+        <span style={{ fontWeight: 700, fontSize: '1rem' }}>🚑 Live Ambulance Tracking</span>
         <span
           style={{
             fontSize: '0.78rem', fontWeight: 600, padding: '4px 10px',
@@ -175,10 +214,41 @@ export default function TrackingPage() {
 
       <div className="max-w-5xl mx-auto px-4 py-6 grid gap-6" style={{ gridTemplateColumns: '1fr' }}>
 
+        {/* Live GPS Status Bar */}
+        <div className="glass-panel px-4 py-3 flex flex-wrap items-center justify-between gap-3 text-xs">
+          <div className="flex items-center gap-2">
+            <span className="relative flex h-3 w-3">
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+              <span className="relative inline-flex rounded-full h-3 w-3 bg-emerald-500"></span>
+            </span>
+            <span className="font-semibold text-emerald-600">
+              {liveStreamStatus.active ? `Live Driver Stream Connected (${liveStreamStatus.source})` : 'Waiting for Driver Live Location…'}
+            </span>
+          </div>
+
+          <div className="flex items-center gap-4 text-gray-500">
+            {driverPos && (
+              <span>
+                Coordinates: <strong className="font-mono text-gray-800">{driverPos.lat.toFixed(4)}, {driverPos.lng.toFixed(4)}</strong>
+              </span>
+            )}
+            {liveStreamStatus.speed !== null && (
+              <span>
+                Speed: <strong className="text-gray-800">{liveStreamStatus.speed} km/h</strong>
+              </span>
+            )}
+            {liveStreamStatus.lastUpdated && (
+              <span>
+                Updated: <strong className="text-gray-800">{liveStreamStatus.lastUpdated}</strong>
+              </span>
+            )}
+          </div>
+        </div>
+
         {/* ── Map ── */}
         <div
           style={{
-            height: '400px', borderRadius: '16px', overflow: 'hidden',
+            height: '420px', borderRadius: '16px', overflow: 'hidden',
             border: '1px solid var(--border)', boxShadow: 'var(--shadow-md)',
           }}
         >

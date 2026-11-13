@@ -1,10 +1,10 @@
 'use client';
 // src/app/(driver)/active/page.jsx
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import dynamic from 'next/dynamic';
-import { Phone, MapPin, ChevronLeft, CheckCircle } from 'lucide-react';
+import { Phone, MapPin, ChevronLeft, Radio, Play, Pause, RefreshCw } from 'lucide-react';
 import Navbar from '@/components/layout/Navbar';
 import Badge from '@/components/ui/Badge';
 import Button from '@/components/ui/Button';
@@ -12,6 +12,8 @@ import Card from '@/components/ui/Card';
 import { driverAPI } from '@/lib/api';
 import { useGeolocation } from '@/hooks/useGeolocation';
 import { emitDriverLocation } from '@/lib/socket';
+import { updateAmbulanceLocation } from '@/lib/firebaseTracking';
+import { isConfigured } from '@/lib/firebase';
 
 const MapView = dynamic(() => import('@/components/map/MapView'), {
   ssr: false,
@@ -25,7 +27,7 @@ const MapView = dynamic(() => import('@/components/map/MapView'), {
 const TRIP_STATUSES = ['Accepted', 'En Route', 'Arrived', 'Completed'];
 
 const MOCK_TRIP = {
-  _id: 'trip-001',
+  _id: 'MOCK-001',
   status: 'Accepted',
   patientName: 'Jane Smith',
   emergencyType: 'Cardiac',
@@ -38,24 +40,91 @@ const MOCK_TRIP = {
 
 export default function DriverActivePage() {
   const router = useRouter();
-  const { location, watchLocation, clearWatch } = useGeolocation();
+  const { location: geoLoc, watchLocation, clearWatch } = useGeolocation();
   const [trip, setTrip] = useState(MOCK_TRIP);
   const [updating, setUpdating] = useState(false);
   const [completed, setCompleted] = useState(false);
 
+  // Driver current coordinates (GPS or simulated)
+  const [activeLoc, setActiveLoc] = useState({
+    lat: 23.7983,
+    lng: 90.4045,
+    speed: 38,
+    heading: 45,
+  });
+
+  const [isSimulating, setIsSimulating] = useState(false);
+  const [lastSyncTime, setLastSyncTime] = useState(null);
+  const simulationTimerRef = useRef(null);
+
   const currentIdx = TRIP_STATUSES.indexOf(trip.status);
 
-  // Watch location and emit to socket
+  // Watch real device GPS
   useEffect(() => {
     const watchId = watchLocation();
     return () => clearWatch(watchId);
   }, [watchLocation, clearWatch]);
 
+  // Sync real GPS if available and not manually simulating
   useEffect(() => {
-    if (location) {
-      emitDriverLocation(location.lat, location.lng);
+    if (geoLoc && !isSimulating) {
+      setActiveLoc((prev) => ({
+        ...prev,
+        lat: geoLoc.lat,
+        lng: geoLoc.lng,
+      }));
     }
-  }, [location]);
+  }, [geoLoc, isSimulating]);
+
+  // Broadcast to Firebase and Socket whenever activeLoc or trip.status changes
+  useEffect(() => {
+    if (!activeLoc) return;
+
+    // 1. Socket emit
+    emitDriverLocation(activeLoc.lat, activeLoc.lng);
+
+    // 2. Firebase live location push
+    updateAmbulanceLocation(trip._id, {
+      lat: activeLoc.lat,
+      lng: activeLoc.lng,
+      speed: activeLoc.speed || 35,
+      heading: activeLoc.heading || 0,
+      status: trip.status,
+    }).then(() => {
+      setLastSyncTime(new Date().toLocaleTimeString());
+    });
+  }, [activeLoc, trip._id, trip.status]);
+
+  // Simulation loop for testing without physical GPS movement
+  useEffect(() => {
+    if (isSimulating) {
+      simulationTimerRef.current = setInterval(() => {
+        setActiveLoc((prev) => {
+          const target = trip.userLocation || { lat: 23.8103, lng: 90.4125 };
+          const step = 0.0007; // ~70 meters per tick
+          const dLat = target.lat - prev.lat;
+          const dLng = target.lng - prev.lng;
+          const dist = Math.sqrt(dLat * dLat + dLng * dLng);
+
+          if (dist < 0.0005) {
+            setIsSimulating(false);
+            return prev;
+          }
+
+          return {
+            lat: prev.lat + (dLat / dist) * step,
+            lng: prev.lng + (dLng / dist) * step,
+            speed: Math.round(30 + Math.random() * 15),
+            heading: Math.round((Math.atan2(dLng, dLat) * 180) / Math.PI),
+          };
+        });
+      }, 2000);
+    } else {
+      clearInterval(simulationTimerRef.current);
+    }
+
+    return () => clearInterval(simulationTimerRef.current);
+  }, [isSimulating, trip.userLocation]);
 
   const handleNextStatus = async () => {
     if (currentIdx >= TRIP_STATUSES.length - 1) return;
@@ -65,6 +134,15 @@ export default function DriverActivePage() {
       await driverAPI.updateBookingStatus(trip._id, nextStatus);
     } catch {}
     setTrip((t) => ({ ...t, status: nextStatus }));
+
+    // Update Firebase immediately with new status
+    updateAmbulanceLocation(trip._id, {
+      lat: activeLoc.lat,
+      lng: activeLoc.lng,
+      speed: activeLoc.speed,
+      status: nextStatus,
+    });
+
     if (nextStatus === 'Completed') setCompleted(true);
     setUpdating(false);
   };
@@ -113,7 +191,7 @@ export default function DriverActivePage() {
           <ChevronLeft size={20} className="text-gray-600" />
         </button>
         <div className="flex-1">
-          <h1 className="font-bold text-gray-900">Active Trip</h1>
+          <h1 className="font-bold text-gray-900">Active Trip #{trip._id}</h1>
           <div className="flex items-center gap-1.5 mt-0.5">
             <span className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
             <span className="text-xs text-green-600 font-medium">{trip.status}</span>
@@ -124,13 +202,13 @@ export default function DriverActivePage() {
 
       <div className="flex-1 overflow-y-auto">
         {/* Map */}
-        <div className="h-56 mx-4 mt-4 rounded-2xl overflow-hidden shadow-sm">
+        <div className="h-56 mx-4 mt-4 rounded-2xl overflow-hidden shadow-sm border border-gray-200">
           <MapView
             center={trip.userLocation ? [trip.userLocation.lat, trip.userLocation.lng] : [23.8103, 90.4125]}
             userLocation={trip.userLocation}
-            driverLocation={location}
-            route={location && trip.userLocation
-              ? [[location.lat, location.lng], [trip.userLocation.lat, trip.userLocation.lng]]
+            driverLocation={activeLoc}
+            route={activeLoc && trip.userLocation
+              ? [[activeLoc.lat, activeLoc.lng], [trip.userLocation.lat, trip.userLocation.lng]]
               : null
             }
             height="100%"
@@ -138,6 +216,70 @@ export default function DriverActivePage() {
         </div>
 
         <div className="px-4 py-4 pb-8 space-y-4">
+          {/* Live Firebase Broadcast Console */}
+          <div className="rounded-2xl p-4 bg-gradient-to-r from-red-500/10 via-emerald-500/10 to-blue-500/10 border border-emerald-500/20 backdrop-blur">
+            <div className="flex items-center justify-between mb-2">
+              <div className="flex items-center gap-2">
+                <span className="relative flex h-3 w-3">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                  <span className="relative inline-flex rounded-full h-3 w-3 bg-emerald-500"></span>
+                </span>
+                <span className="text-xs font-bold text-emerald-800 tracking-wide uppercase">
+                  {isConfigured ? 'Firebase Live Cloud Stream' : 'Live GPS Location Broadcasting'}
+                </span>
+              </div>
+              <span className="text-[11px] font-mono text-gray-500">
+                {lastSyncTime ? `Synced: ${lastSyncTime}` : 'Connecting...'}
+              </span>
+            </div>
+
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs font-mono bg-white/80 p-2.5 rounded-xl border border-gray-200/60 shadow-sm">
+              <div>
+                <span className="text-gray-400 block text-[10px]">LATITUDE</span>
+                <span className="font-semibold text-gray-800">{activeLoc.lat.toFixed(5)}</span>
+              </div>
+              <div>
+                <span className="text-gray-400 block text-[10px]">LONGITUDE</span>
+                <span className="font-semibold text-gray-800">{activeLoc.lng.toFixed(5)}</span>
+              </div>
+              <div>
+                <span className="text-gray-400 block text-[10px]">SPEED</span>
+                <span className="font-semibold text-gray-800">{activeLoc.speed} km/h</span>
+              </div>
+              <div>
+                <span className="text-gray-400 block text-[10px]">STATUS</span>
+                <span className="font-semibold text-emerald-600">{trip.status}</span>
+              </div>
+            </div>
+
+            {/* Test Simulation Controls */}
+            <div className="mt-3 flex items-center justify-between gap-2 pt-2 border-t border-gray-200/40">
+              <span className="text-xs text-gray-600 flex items-center gap-1">
+                <Radio size={14} className="text-primary-600" />
+                Live Driver Movement Demo:
+              </span>
+              <button
+                type="button"
+                onClick={() => setIsSimulating(!isSimulating)}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all shadow-sm ${
+                  isSimulating
+                    ? 'bg-amber-100 text-amber-800 hover:bg-amber-200 border border-amber-300'
+                    : 'bg-primary-600 text-white hover:bg-primary-700'
+                }`}
+              >
+                {isSimulating ? (
+                  <>
+                    <Pause size={13} /> Pause Simulation
+                  </>
+                ) : (
+                  <>
+                    <Play size={13} /> Simulate Driving
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+
           {/* Status progress */}
           <Card>
             <div className="flex items-center justify-between mb-1">
