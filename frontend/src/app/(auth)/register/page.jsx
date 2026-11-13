@@ -1,19 +1,25 @@
 'use client';
-// src/app/(auth)/register/page.jsx — Professional Split-Screen Design
+// src/app/(auth)/register/page.jsx — Modern Centered Healthcare Card Design
 
 import { useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
+import {
+  User,
+  Mail,
+  Phone,
+  Lock,
+  Eye,
+  EyeOff,
+  ArrowRight,
+  ShieldCheck,
+  CheckCircle2,
+  Siren,
+  Sparkles,
+} from 'lucide-react';
 import ThemeToggle from '@/components/ui/ThemeToggle';
 import { authAPI } from '@/lib/api';
 import { setToken, setUser } from '@/lib/auth';
-
-const highlights = [
-  { icon: '⚡', text: 'Sub-5 minute emergency dispatch' },
-  { icon: '📍', text: 'Real-time GPS ambulance tracking' },
-  { icon: '🛡️', text: 'Verified paramedics & hospital triage' },
-  { icon: '💳', text: 'No upfront payment needed in crisis' },
-];
 
 export default function RegisterPage() {
   const router = useRouter();
@@ -21,6 +27,7 @@ export default function RegisterPage() {
   const [errors, setErrors] = useState({});
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [apiError, setApiError] = useState('');
 
   const validate = () => {
@@ -31,8 +38,8 @@ export default function RegisterPage() {
     if (!form.phone) e.phone = 'Phone number is required';
     else if (!/^[0-9+\-\s()]{7,15}$/.test(form.phone)) e.phone = 'Enter a valid phone number';
     if (!form.password) e.password = 'Password is required';
-    else if (form.password.length < 6) e.password = 'Password must be at least 6 characters';
-    if (!form.confirmPassword) e.confirmPassword = 'Please confirm your password';
+    else if (form.password.length < 6) e.password = 'Must be at least 6 characters';
+    if (!form.confirmPassword) e.confirmPassword = 'Confirm your password';
     else if (form.password !== form.confirmPassword) e.confirmPassword = 'Passwords do not match';
     setErrors(e);
     return Object.keys(e).length === 0;
@@ -75,475 +82,262 @@ export default function RegisterPage() {
   };
 
   return (
-    <div className="min-h-screen flex" style={{ background: 'var(--bg)', fontFamily: 'var(--font-sans)' }}>
+    <div className="min-h-screen relative overflow-hidden bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 flex flex-col justify-between py-8 px-4 sm:px-6">
 
-      {/* ── LEFT PANEL — Brand / Info (Matching Login) ── */}
+      {/* ── Soft Pink/Rose Radial Ambient Glow (matching landing) ── */}
       <div
-        className="hidden lg:flex flex-col justify-between relative overflow-hidden"
+        className="absolute pointer-events-none"
         style={{
-          width: '45%',
-          flexShrink: 0,
-          background: 'linear-gradient(145deg, #be123c 0%, #e11d48 40%, #f43f5e 100%)',
-          padding: '48px',
+          top: '-20%',
+          left: '50%',
+          transform: 'translateX(-50%)',
+          width: '900px',
+          height: '650px',
+          borderRadius: '50%',
+          background: 'radial-gradient(ellipse at center, rgba(244, 63, 94, 0.18) 0%, rgba(254, 205, 211, 0.12) 40%, transparent 70%)',
+          filter: 'blur(35px)',
         }}
-      >
-        {/* Subtle dot pattern */}
-        <div
-          style={{
-            position: 'absolute',
-            inset: 0,
-            opacity: 0.07,
-            backgroundImage: `radial-gradient(circle at 1px 1px, white 1px, transparent 0)`,
-            backgroundSize: '28px 28px',
-          }}
-        />
+      />
 
-        {/* Decorative ambient blur rings */}
-        <div
-          style={{
-            position: 'absolute',
-            bottom: '-80px',
-            right: '-80px',
-            width: '320px',
-            height: '320px',
-            borderRadius: '50%',
-            background: 'rgba(255,255,255,0.08)',
-          }}
-        />
-        <div
-          style={{
-            position: 'absolute',
-            top: '20%',
-            left: '-60px',
-            width: '200px',
-            height: '200px',
-            borderRadius: '50%',
-            background: 'rgba(255,255,255,0.05)',
-          }}
-        />
+      {/* ── Razor-sharp Grid Pattern ── */}
+      <div className="absolute inset-0 bg-grid-pattern pointer-events-none opacity-90 dark:opacity-40" />
 
-        {/* Logo */}
-        <div className="relative z-10 flex items-center gap-3">
-          <div
-            style={{
-              width: '44px',
-              height: '44px',
-              borderRadius: '12px',
-              background: 'rgba(255,255,255,0.2)',
-              backdropFilter: 'blur(8px)',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              fontSize: '1.4rem',
-            }}
-          >
-            🚑
-          </div>
-          <span style={{ fontWeight: 800, fontSize: '1.2rem', color: '#fff', letterSpacing: '-0.02em' }}>
-            AmbulanceFinder
-          </span>
-        </div>
+      {/* ── Top Bar: Back Link + Theme Toggle ── */}
+      <div className="relative z-10 max-w-5xl mx-auto w-full flex items-center justify-between mb-4">
+        <Link
+          href="/"
+          className="inline-flex items-center gap-2 text-xs sm:text-sm font-semibold text-slate-600 dark:text-slate-400 hover:text-rose-600 dark:hover:text-rose-400 transition-colors group"
+        >
+          <svg className="w-4 h-4 group-hover:-translate-x-1 transition-transform" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
+          </svg>
+          <span>Back to home</span>
+        </Link>
 
-        {/* Headline & Value Proposition */}
-        <div className="relative z-10">
-          <h2
-            style={{
-              color: '#fff',
-              fontWeight: 800,
-              fontSize: '2.4rem',
-              lineHeight: 1.2,
-              letterSpacing: '-0.03em',
-              marginBottom: '20px',
-            }}
-          >
-            Create Account,<br />
-            <span style={{ opacity: 0.85 }}>Save Lives Fast.</span>
-          </h2>
-          <p style={{ color: 'rgba(255,255,255,0.75)', fontSize: '1rem', lineHeight: 1.65, marginBottom: '36px' }}>
-            Bangladesh’s fastest emergency dispatch platform.<br />
-            One tap. Verified medics. Real-time GPS tracking.
-          </p>
-
-          {/* Highlights */}
-          <div className="flex flex-col gap-3">
-            {highlights.map((h) => (
-              <div key={h.text} style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                <div
-                  style={{
-                    width: '34px',
-                    height: '34px',
-                    borderRadius: '8px',
-                    background: 'rgba(255,255,255,0.15)',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    fontSize: '1rem',
-                    flexShrink: 0,
-                  }}
-                >
-                  {h.icon}
-                </div>
-                <span style={{ color: 'rgba(255,255,255,0.92)', fontSize: '0.9rem', fontWeight: 500 }}>
-                  {h.text}
-                </span>
-              </div>
-            ))}
-          </div>
-        </div>
-
-        {/* Footer info */}
-        <div className="relative z-10">
-          <p style={{ color: 'rgba(255,255,255,0.5)', fontSize: '0.78rem' }}>
-            🔒 256-bit Encrypted · 24/7 National Emergency Connected
-          </p>
+        <div className="flex items-center gap-3">
+          <ThemeToggle />
         </div>
       </div>
 
-      {/* ── RIGHT PANEL — Form ── */}
-      <div
-        className="flex-1 flex flex-col items-center justify-center relative overflow-y-auto"
-        style={{ padding: '40px 32px', minHeight: '100vh' }}
-      >
-        {/* Theme toggle */}
-        <div style={{ position: 'absolute', top: '20px', right: '20px' }}>
-          <ThemeToggle />
-        </div>
+      {/* ── Main Registration Card Container ── */}
+      <div className="relative z-10 max-w-xl mx-auto w-full my-auto">
+        <div className="bg-white/90 dark:bg-slate-900/90 backdrop-blur-md rounded-3xl border border-slate-200 dark:border-slate-800 shadow-2xl p-6 sm:p-9 space-y-6">
 
-        {/* Mobile logo */}
-        <div className="lg:hidden flex items-center gap-2 mb-8">
-          <span style={{ fontSize: '1.6rem' }}>🚑</span>
-          <span style={{ fontWeight: 800, fontSize: '1.1rem', color: 'var(--primary)' }}>
-            AmbulanceFinder
-          </span>
-        </div>
+          {/* Header */}
+          <div className="text-center space-y-3">
+            <div className="inline-flex items-center justify-center w-14 h-14 rounded-2xl bg-gradient-to-tr from-rose-600 to-rose-500 text-white shadow-lg shadow-rose-500/25">
+              <Siren size={28} className="animate-pulse" />
+            </div>
 
-        <div style={{ width: '100%', maxWidth: '420px' }}>
-
-          {/* Back link */}
-          <Link
-            href="/"
-            style={{
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: '6px',
-              fontSize: '0.84rem',
-              color: 'var(--on-surface-muted)',
-              textDecoration: 'none',
-              marginBottom: '28px',
-              transition: 'color 0.2s',
-            }}
-          >
-            <svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
-            </svg>
-            Back to home
-          </Link>
-
-          {/* Heading */}
-          <div style={{ marginBottom: '28px' }}>
-            <h1
-              style={{
-                fontSize: '1.75rem',
-                fontWeight: 800,
-                letterSpacing: '-0.03em',
-                color: 'var(--on-surface)',
-                marginBottom: '6px',
-              }}
-            >
-              Create your account
-            </h1>
-            <p style={{ fontSize: '0.9rem', color: 'var(--on-surface-muted)' }}>
-              Join AmbulanceFinder — stay safe, stay prepared
-            </p>
+            <div>
+              <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-rose-50 dark:bg-rose-950/60 border border-rose-200 dark:border-rose-900/60 text-rose-700 dark:text-rose-300 text-xs font-bold mb-2">
+                <Sparkles size={12} className="text-rose-500" />
+                <span>Patient &amp; Family Account</span>
+              </div>
+              <h1 className="text-2xl sm:text-3xl font-black text-slate-950 dark:text-white tracking-tight">
+                Create your account
+              </h1>
+              <p className="text-xs sm:text-sm text-slate-500 dark:text-slate-400 mt-1">
+                Join Bangladesh’s fastest emergency medical response network
+              </p>
+            </div>
           </div>
 
           {/* Error Banner */}
           {apiError && (
-            <div
-              style={{
-                marginBottom: '20px',
-                padding: '12px 14px',
-                borderRadius: '10px',
-                background: 'rgba(239,68,68,0.08)',
-                border: '1px solid rgba(239,68,68,0.25)',
-                color: '#dc2626',
-                fontSize: '0.875rem',
-              }}
-            >
-              ⚠️ {apiError}
+            <div className="p-3.5 rounded-xl text-xs sm:text-sm font-semibold bg-rose-50 dark:bg-rose-950/60 border border-rose-200 dark:border-rose-900/60 text-rose-700 dark:text-rose-300 flex items-center gap-2">
+              <span>⚠️</span>
+              <span>{apiError}</span>
             </div>
           )}
 
-          {/* Form */}
-          <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+          {/* Form with 2-Column Responsive Grid */}
+          <form onSubmit={handleSubmit} className="space-y-4">
 
-            {/* Name */}
+            {/* Full Name (Full Width) */}
             <div>
-              <label
-                style={{
-                  display: 'block',
-                  fontSize: '0.84rem',
-                  fontWeight: 600,
-                  color: 'var(--on-surface)',
-                  marginBottom: '6px',
-                }}
-              >
-                Full Name <span style={{ color: 'var(--primary)' }}>*</span>
+              <label className="block text-xs font-bold uppercase tracking-wider text-slate-700 dark:text-slate-300 mb-1.5">
+                Full Name <span className="text-rose-600">*</span>
               </label>
-              <input
-                type="text"
-                name="name"
-                value={form.name}
-                onChange={handleChange}
-                placeholder="Amio Das"
-                style={{
-                  width: '100%',
-                  padding: '12px 14px',
-                  borderRadius: '10px',
-                  border: `1.5px solid ${errors.name ? 'var(--primary)' : 'var(--border)'}`,
-                  background: 'var(--surface)',
-                  color: 'var(--on-surface)',
-                  fontSize: '0.9rem',
-                  outline: 'none',
-                  transition: 'border-color 0.2s',
-                }}
-              />
-              {errors.name && (
-                <p style={{ fontSize: '0.78rem', color: 'var(--primary)', marginTop: '4px' }}>
-                  {errors.name}
-                </p>
-              )}
-            </div>
-
-            {/* Email */}
-            <div>
-              <label
-                style={{
-                  display: 'block',
-                  fontSize: '0.84rem',
-                  fontWeight: 600,
-                  color: 'var(--on-surface)',
-                  marginBottom: '6px',
-                }}
-              >
-                Email Address <span style={{ color: 'var(--primary)' }}>*</span>
-              </label>
-              <input
-                type="email"
-                name="email"
-                value={form.email}
-                onChange={handleChange}
-                placeholder="you@example.com"
-                style={{
-                  width: '100%',
-                  padding: '12px 14px',
-                  borderRadius: '10px',
-                  border: `1.5px solid ${errors.email ? 'var(--primary)' : 'var(--border)'}`,
-                  background: 'var(--surface)',
-                  color: 'var(--on-surface)',
-                  fontSize: '0.9rem',
-                  outline: 'none',
-                  transition: 'border-color 0.2s',
-                }}
-              />
-              {errors.email && (
-                <p style={{ fontSize: '0.78rem', color: 'var(--primary)', marginTop: '4px' }}>
-                  {errors.email}
-                </p>
-              )}
-            </div>
-
-            {/* Phone */}
-            <div>
-              <label
-                style={{
-                  display: 'block',
-                  fontSize: '0.84rem',
-                  fontWeight: 600,
-                  color: 'var(--on-surface)',
-                  marginBottom: '6px',
-                }}
-              >
-                Phone Number <span style={{ color: 'var(--primary)' }}>*</span>
-              </label>
-              <input
-                type="tel"
-                name="phone"
-                value={form.phone}
-                onChange={handleChange}
-                placeholder="+880 1700-000000"
-                style={{
-                  width: '100%',
-                  padding: '12px 14px',
-                  borderRadius: '10px',
-                  border: `1.5px solid ${errors.phone ? 'var(--primary)' : 'var(--border)'}`,
-                  background: 'var(--surface)',
-                  color: 'var(--on-surface)',
-                  fontSize: '0.9rem',
-                  outline: 'none',
-                  transition: 'border-color 0.2s',
-                }}
-              />
-              {errors.phone && (
-                <p style={{ fontSize: '0.78rem', color: 'var(--primary)', marginTop: '4px' }}>
-                  {errors.phone}
-                </p>
-              )}
-            </div>
-
-            {/* Password */}
-            <div>
-              <label
-                style={{
-                  display: 'block',
-                  fontSize: '0.84rem',
-                  fontWeight: 600,
-                  color: 'var(--on-surface)',
-                  marginBottom: '6px',
-                }}
-              >
-                Password <span style={{ color: 'var(--primary)' }}>*</span>
-              </label>
-              <div style={{ position: 'relative' }}>
+              <div className="relative">
+                <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400">
+                  <User size={16} />
+                </div>
                 <input
-                  type={showPassword ? 'text' : 'password'}
-                  name="password"
-                  value={form.password}
+                  type="text"
+                  name="name"
+                  value={form.name}
                   onChange={handleChange}
-                  placeholder="At least 6 characters"
-                  style={{
-                    width: '100%',
-                    padding: '12px 42px 12px 14px',
-                    borderRadius: '10px',
-                    border: `1.5px solid ${errors.password ? 'var(--primary)' : 'var(--border)'}`,
-                    background: 'var(--surface)',
-                    color: 'var(--on-surface)',
-                    fontSize: '0.9rem',
-                    outline: 'none',
-                    transition: 'border-color 0.2s',
-                  }}
+                  placeholder="Amio Das"
+                  className={`w-full pl-10 pr-4 py-3 rounded-xl text-sm font-medium bg-white dark:bg-slate-950 text-slate-900 dark:text-white border transition-colors outline-none focus:ring-2 focus:ring-rose-500/20 ${
+                    errors.name ? 'border-rose-500 dark:border-rose-500' : 'border-slate-200 dark:border-slate-800 focus:border-rose-500'
+                  }`}
                 />
-                <button
-                  type="button"
-                  onClick={() => setShowPassword(!showPassword)}
-                  style={{
-                    position: 'absolute',
-                    right: '12px',
-                    top: '50%',
-                    transform: 'translateY(-50%)',
-                    background: 'none',
-                    border: 'none',
-                    cursor: 'pointer',
-                    color: 'var(--on-surface-subtle)',
-                    fontSize: '0.9rem',
-                  }}
-                >
-                  {showPassword ? '👁️' : '👁️‍🗨️'}
-                </button>
               </div>
-              {errors.password && (
-                <p style={{ fontSize: '0.78rem', color: 'var(--primary)', marginTop: '4px' }}>
-                  {errors.password}
-                </p>
-              )}
+              {errors.name && <p className="text-xs text-rose-600 dark:text-rose-400 mt-1">{errors.name}</p>}
             </div>
 
-            {/* Confirm Password */}
-            <div>
-              <label
-                style={{
-                  display: 'block',
-                  fontSize: '0.84rem',
-                  fontWeight: 600,
-                  color: 'var(--on-surface)',
-                  marginBottom: '6px',
-                }}
-              >
-                Confirm Password <span style={{ color: 'var(--primary)' }}>*</span>
-              </label>
-              <input
-                type={showPassword ? 'text' : 'password'}
-                name="confirmPassword"
-                value={form.confirmPassword}
-                onChange={handleChange}
-                placeholder="Re-enter your password"
-                style={{
-                  width: '100%',
-                  padding: '12px 14px',
-                  borderRadius: '10px',
-                  border: `1.5px solid ${errors.confirmPassword ? 'var(--primary)' : 'var(--border)'}`,
-                  background: 'var(--surface)',
-                  color: 'var(--on-surface)',
-                  fontSize: '0.9rem',
-                  outline: 'none',
-                  transition: 'border-color 0.2s',
-                }}
-              />
-              {errors.confirmPassword && (
-                <p style={{ fontSize: '0.78rem', color: 'var(--primary)', marginTop: '4px' }}>
-                  {errors.confirmPassword}
-                </p>
-              )}
+            {/* Email & Phone (2 Columns on SM+) */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              {/* Email */}
+              <div>
+                <label className="block text-xs font-bold uppercase tracking-wider text-slate-700 dark:text-slate-300 mb-1.5">
+                  Email Address <span className="text-rose-600">*</span>
+                </label>
+                <div className="relative">
+                  <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400">
+                    <Mail size={16} />
+                  </div>
+                  <input
+                    type="email"
+                    name="email"
+                    value={form.email}
+                    onChange={handleChange}
+                    placeholder="you@example.com"
+                    className={`w-full pl-10 pr-4 py-3 rounded-xl text-sm font-medium bg-white dark:bg-slate-950 text-slate-900 dark:text-white border transition-colors outline-none focus:ring-2 focus:ring-rose-500/20 ${
+                      errors.email ? 'border-rose-500 dark:border-rose-500' : 'border-slate-200 dark:border-slate-800 focus:border-rose-500'
+                    }`}
+                  />
+                </div>
+                {errors.email && <p className="text-xs text-rose-600 dark:text-rose-400 mt-1">{errors.email}</p>}
+              </div>
+
+              {/* Phone */}
+              <div>
+                <label className="block text-xs font-bold uppercase tracking-wider text-slate-700 dark:text-slate-300 mb-1.5">
+                  Phone Number <span className="text-rose-600">*</span>
+                </label>
+                <div className="relative">
+                  <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400">
+                    <Phone size={16} />
+                  </div>
+                  <input
+                    type="tel"
+                    name="phone"
+                    value={form.phone}
+                    onChange={handleChange}
+                    placeholder="+880 1700-000000"
+                    className={`w-full pl-10 pr-4 py-3 rounded-xl text-sm font-medium bg-white dark:bg-slate-950 text-slate-900 dark:text-white border transition-colors outline-none focus:ring-2 focus:ring-rose-500/20 ${
+                      errors.phone ? 'border-rose-500 dark:border-rose-500' : 'border-slate-200 dark:border-slate-800 focus:border-rose-500'
+                    }`}
+                  />
+                </div>
+                {errors.phone && <p className="text-xs text-rose-600 dark:text-rose-400 mt-1">{errors.phone}</p>}
+              </div>
+            </div>
+
+            {/* Password & Confirm Password (2 Columns on SM+) */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              {/* Password */}
+              <div>
+                <label className="block text-xs font-bold uppercase tracking-wider text-slate-700 dark:text-slate-300 mb-1.5">
+                  Password <span className="text-rose-600">*</span>
+                </label>
+                <div className="relative">
+                  <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400">
+                    <Lock size={16} />
+                  </div>
+                  <input
+                    type={showPassword ? 'text' : 'password'}
+                    name="password"
+                    value={form.password}
+                    onChange={handleChange}
+                    placeholder="At least 6 chars"
+                    className={`w-full pl-10 pr-10 py-3 rounded-xl text-sm font-medium bg-white dark:bg-slate-950 text-slate-900 dark:text-white border transition-colors outline-none focus:ring-2 focus:ring-rose-500/20 ${
+                      errors.password ? 'border-rose-500 dark:border-rose-500' : 'border-slate-200 dark:border-slate-800 focus:border-rose-500'
+                    }`}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword(!showPassword)}
+                    className="absolute inset-y-0 right-0 pr-3 flex items-center text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition-colors"
+                  >
+                    {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                  </button>
+                </div>
+                {errors.password && <p className="text-xs text-rose-600 dark:text-rose-400 mt-1">{errors.password}</p>}
+              </div>
+
+              {/* Confirm Password */}
+              <div>
+                <label className="block text-xs font-bold uppercase tracking-wider text-slate-700 dark:text-slate-300 mb-1.5">
+                  Confirm Password <span className="text-rose-600">*</span>
+                </label>
+                <div className="relative">
+                  <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400">
+                    <Lock size={16} />
+                  </div>
+                  <input
+                    type={showConfirmPassword ? 'text' : 'password'}
+                    name="confirmPassword"
+                    value={form.confirmPassword}
+                    onChange={handleChange}
+                    placeholder="Re-enter password"
+                    className={`w-full pl-10 pr-10 py-3 rounded-xl text-sm font-medium bg-white dark:bg-slate-950 text-slate-900 dark:text-white border transition-colors outline-none focus:ring-2 focus:ring-rose-500/20 ${
+                      errors.confirmPassword ? 'border-rose-500 dark:border-rose-500' : 'border-slate-200 dark:border-slate-800 focus:border-rose-500'
+                    }`}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                    className="absolute inset-y-0 right-0 pr-3 flex items-center text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition-colors"
+                  >
+                    {showConfirmPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                  </button>
+                </div>
+                {errors.confirmPassword && <p className="text-xs text-rose-600 dark:text-rose-400 mt-1">{errors.confirmPassword}</p>}
+              </div>
             </div>
 
             {/* Terms notice */}
-            <p style={{ fontSize: '0.75rem', color: 'var(--on-surface-subtle)', lineHeight: 1.5, marginTop: '2px' }}>
-              By registering, you agree to our{' '}
-              <a href="#" style={{ color: 'var(--primary)', textDecoration: 'none' }}>Terms of Service</a>
+            <p className="text-[11px] text-slate-500 dark:text-slate-400 leading-relaxed pt-1">
+              By creating an account, you agree to AmbulanceFinder’s{' '}
+              <a href="#" className="text-rose-600 dark:text-rose-400 font-semibold hover:underline">Terms of Service</a>
               {' '}and{' '}
-              <a href="#" style={{ color: 'var(--primary)', textDecoration: 'none' }}>Privacy Policy</a>.
+              <a href="#" className="text-rose-600 dark:text-rose-400 font-semibold hover:underline">Privacy Policy</a>.
             </p>
 
             {/* Submit Button */}
             <button
               type="submit"
               disabled={loading}
-              style={{
-                width: '100%',
-                padding: '13px',
-                borderRadius: '10px',
-                background: 'linear-gradient(135deg, var(--primary) 0%, #be123c 100%)',
-                color: '#fff',
-                fontWeight: 700,
-                fontSize: '0.95rem',
-                border: 'none',
-                cursor: loading ? 'not-allowed' : 'pointer',
-                opacity: loading ? 0.7 : 1,
-                boxShadow: '0 4px 14px rgba(225,29,72,0.35)',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                gap: '8px',
-                transition: 'opacity 0.2s, transform 0.15s',
-              }}
+              className="w-full flex items-center justify-center gap-2.5 bg-gradient-to-r from-rose-600 via-rose-600 to-rose-700 hover:from-rose-700 hover:to-rose-800 text-white font-extrabold text-sm py-3.5 rounded-2xl shadow-lg shadow-rose-600/30 hover:shadow-xl hover:shadow-rose-600/40 hover:-translate-y-0.5 active:translate-y-0 transition-all duration-150 disabled:opacity-70 disabled:cursor-not-allowed"
             >
-              {loading ? 'Creating Account...' : 'Create Account →'}
+              <span>{loading ? 'Creating Your Account...' : 'Create Account'}</span>
+              <ArrowRight size={17} />
             </button>
           </form>
 
           {/* Switch to login */}
-          <p
-            style={{
-              textAlign: 'center',
-              fontSize: '0.88rem',
-              color: 'var(--on-surface-muted)',
-              marginTop: '24px',
-            }}
-          >
-            Already have an account?{' '}
+          <div className="pt-2 text-center text-xs sm:text-sm text-slate-500 dark:text-slate-400 border-t border-slate-100 dark:border-slate-800">
+            <span>Already registered? </span>
             <Link
               href="/login"
-              style={{
-                color: 'var(--primary)',
-                fontWeight: 700,
-                textDecoration: 'none',
-              }}
+              className="text-rose-600 dark:text-rose-400 font-bold hover:underline ml-1"
             >
-              Sign in
+              Sign in to your account
             </Link>
-          </p>
+          </div>
 
         </div>
+
+        {/* ── Trust Indicators Strip ── */}
+        <div className="mt-6 flex flex-wrap items-center justify-center gap-6 text-xs text-slate-500 dark:text-slate-400">
+          <span className="flex items-center gap-1.5 font-medium">
+            <CheckCircle2 size={14} className="text-emerald-500" /> 100% Free Sign Up
+          </span>
+          <span className="flex items-center gap-1.5 font-medium">
+            <ShieldCheck size={14} className="text-emerald-500" /> DGHS &amp; Medical Certified
+          </span>
+          <span className="flex items-center gap-1.5 font-medium">
+            <Lock size={14} className="text-emerald-500" /> 256-bit Encrypted
+          </span>
+        </div>
+      </div>
+
+      {/* ── Footer note ── */}
+      <div className="relative z-10 text-center text-[11px] text-slate-400 mt-6">
+        <p>In life-threatening situations, dial national emergency <strong className="text-rose-600">999</strong> directly.</p>
       </div>
 
     </div>
