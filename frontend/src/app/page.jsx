@@ -227,16 +227,16 @@ export default function LandingPage() {
             top: '-25%',
             left: '50%',
             transform: 'translateX(-50%)',
-            width: '1000px',
-            height: '750px',
+            width: '1050px',
+            height: '800px',
             borderRadius: '50%',
-            background: 'radial-gradient(ellipse at center, rgba(244, 63, 94, 0.16) 0%, rgba(254, 205, 211, 0.12) 40%, transparent 70%)',
+            background: 'radial-gradient(ellipse at center, rgba(244, 63, 94, 0.22) 0%, rgba(254, 205, 211, 0.18) 45%, transparent 70%)',
             filter: 'blur(35px)',
           }}
         />
 
-        {/* Crisp grid pattern layer */}
-        <div className="absolute inset-0 bg-grid-pattern pointer-events-none opacity-85 dark:opacity-35" />
+        {/* Light & razor-sharp grid pattern layer */}
+        <div className="absolute inset-0 bg-grid-pattern pointer-events-none opacity-90 dark:opacity-40" />
 
         <div className="relative z-10 max-w-5xl mx-auto px-4 sm:px-6 text-center space-y-7">
 
