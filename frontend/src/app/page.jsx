@@ -239,12 +239,6 @@ export default function LandingPage() {
             </span>
           </h1>
 
-          {/* Subtitle */}
-          <p className="text-base sm:text-xl text-slate-600 dark:text-slate-300 max-w-3xl mx-auto leading-relaxed">
-            Connect with the nearest verified emergency ambulance in under 5 minutes.
-            Real-time GPS tracking, certified paramedics on board, and direct triage routing to Bangladesh’s premier hospitals.
-          </p>
-
           {/* CTAs */}
           <div className="pt-3 flex flex-col sm:flex-row items-center justify-center gap-4">
             <Link
