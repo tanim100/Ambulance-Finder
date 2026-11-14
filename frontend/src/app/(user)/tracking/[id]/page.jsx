@@ -76,15 +76,14 @@ export default function TrackingPage() {
     const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
     let hasLiveStream = false;
 
-    // 1. Subscribe to Firebase Realtime / Local cross-tab stream
-    const unsubscribeFirebase = subscribeToAmbulanceLocation(id, (liveData) => {
+    const handleLocationUpdate = (liveData) => {
       if (liveData?.lat && liveData?.lng) {
         hasLiveStream = true;
         setDriverPos({ lat: liveData.lat, lng: liveData.lng });
         setLiveStreamStatus({
           active: true,
           source: liveData.source === 'firebase-rtdb' ? 'Firebase Realtime DB' :
-                  liveData.source === 'firebase-firestore' ? 'Firebase Firestore' : 'Live GPS Stream',
+                  liveData.source === 'firebase-firestore' ? 'Firebase Firestore' : 'Live Stream',
           speed: liveData.speed,
           lastUpdated: new Date(liveData.updatedAt || Date.now()).toLocaleTimeString(),
         });
@@ -93,7 +92,17 @@ export default function TrackingPage() {
           setBooking((prev) => (prev ? { ...prev, status: liveData.status } : prev));
         }
       }
-    });
+    };
+
+    // 1. Subscribe to Firebase Realtime stream
+    const unsubscribeFirebase = subscribeToAmbulanceLocation(id, handleLocationUpdate);
+    
+    // Also listen to secondary mock alias if tracking MOCK-001 or trip-001
+    let unsubSecondary = null;
+    if (id === 'MOCK-001' || id === 'trip-001') {
+      const otherId = id === 'MOCK-001' ? 'trip-001' : 'MOCK-001';
+      unsubSecondary = subscribeToAmbulanceLocation(otherId, handleLocationUpdate);
+    }
 
     // 2. Socket.io fallback
     try {
@@ -105,14 +114,7 @@ export default function TrackingPage() {
       socketRef.current.emit('join_booking', id);
 
       socketRef.current.on('location_update', ({ lat, lng, speed }) => {
-        hasLiveStream = true;
-        setDriverPos({ lat, lng });
-        setLiveStreamStatus({
-          active: true,
-          source: 'Socket.io Server',
-          speed: speed || 0,
-          lastUpdated: new Date().toLocaleTimeString(),
-        });
+        handleLocationUpdate({ lat, lng, speed, source: 'socket.io' });
       });
 
       socketRef.current.on('booking_status_update', ({ status }) => {
@@ -137,6 +139,7 @@ export default function TrackingPage() {
 
     return () => {
       unsubscribeFirebase();
+      if (unsubSecondary) unsubSecondary();
       socketRef.current?.disconnect();
       clearInterval(intervalRef.current);
     };
@@ -222,7 +225,7 @@ export default function TrackingPage() {
               <span className="relative inline-flex rounded-full h-3 w-3 bg-emerald-500"></span>
             </span>
             <span className="font-semibold text-emerald-600">
-              {liveStreamStatus.active ? `Live Driver Stream Connected (${liveStreamStatus.source})` : 'Waiting for Driver Live Location…'}
+              {liveStreamStatus.active ? `Live Driver Stream Connected (${liveStreamStatus.source})` : 'Listening for Driver Live Location…'}
             </span>
           </div>
 

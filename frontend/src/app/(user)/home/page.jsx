@@ -1,16 +1,17 @@
 'use client';
 // src/app/(user)/home/page.jsx
-// Theme-Aware Live Map & Ambulance Finder
+// Theme-Aware Live Map & Ambulance Finder with Real-time GPS & Firebase Streaming
 
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import dynamic from 'next/dynamic';
 import Link from 'next/link';
-import { Search, MapPin, Filter, ChevronUp, ChevronDown, Radio } from 'lucide-react';
+import { Search, MapPin, Filter, ChevronUp, ChevronDown, Radio, Navigation, RefreshCw } from 'lucide-react';
 import Navbar from '@/components/layout/Navbar';
 import BottomNav from '@/components/layout/BottomNav';
 import AmbulanceCard from '@/components/ambulance/AmbulanceCard';
 import { useGeolocation } from '@/hooks/useGeolocation';
 import { ambulanceAPI } from '@/lib/api';
+import { subscribeToAmbulanceLocation } from '@/lib/firebaseTracking';
 
 const MapView = dynamic(() => import('@/components/map/MapView'), {
   ssr: false,
@@ -38,7 +39,7 @@ const MOCK_AMBULANCES = [
 ];
 
 export default function HomePage() {
-  const { location } = useGeolocation();
+  const { location, getLocation, setManualLocation, loading: geoLoading } = useGeolocation();
   const [ambulances, setAmbulances] = useState(MOCK_AMBULANCES);
   const [selectedFilter, setSelectedFilter] = useState('All');
   const [searchQuery, setSearchQuery] = useState('');
@@ -46,12 +47,35 @@ export default function HomePage() {
   const [sheetExpanded, setSheetExpanded] = useState(false);
   const [loading, setLoading] = useState(false);
   const [mapCenter, setMapCenter] = useState([23.8103, 90.4125]);
+  const [liveDriverPos, setLiveDriverPos] = useState(null);
 
+  // Auto-center map on user location
   useEffect(() => {
-    if (location) {
+    if (location && typeof location.lat === 'number' && typeof location.lng === 'number') {
       setMapCenter([location.lat, location.lng]);
     }
   }, [location]);
+
+  // Listen to live Firebase stream for any active driver
+  useEffect(() => {
+    const unsub = subscribeToAmbulanceLocation('MOCK-001', (liveData) => {
+      if (liveData?.lat && liveData?.lng) {
+        setLiveDriverPos({
+          _id: 'live-driver-stream',
+          vehicleNumber: 'LIVE-AMB',
+          type: 'Advanced',
+          status: liveData.status || 'En Route',
+          driver: 'Live Active Driver',
+          lat: liveData.lat,
+          lng: liveData.lng,
+          speed: liveData.speed,
+          isLiveFirebase: true,
+        });
+      }
+    });
+
+    return () => unsub();
+  }, []);
 
   // Fetch from API with graceful fallback to mock data
   const fetchNearby = useCallback(async () => {
@@ -74,9 +98,18 @@ export default function HomePage() {
     fetchNearby();
   }, [fetchNearby]);
 
+  // Merge live Firebase driver into the list if active
+  const allAmbulances = useMemo(() => {
+    if (liveDriverPos) {
+      const filtered = ambulances.filter((a) => a._id !== 'live-driver-stream');
+      return [liveDriverPos, ...filtered];
+    }
+    return ambulances;
+  }, [ambulances, liveDriverPos]);
+
   // Synchronous filter calculation
   const filteredAmbulances = useMemo(() => {
-    let result = [...ambulances];
+    let result = [...allAmbulances];
     if (selectedFilter !== 'All') {
       result = result.filter((a) => a.type?.toLowerCase() === selectedFilter.toLowerCase());
     }
@@ -90,13 +123,18 @@ export default function HomePage() {
       );
     }
     return result;
-  }, [ambulances, selectedFilter, searchQuery]);
+  }, [allAmbulances, selectedFilter, searchQuery]);
 
-  const availableCount = ambulances.filter((a) => a.status === 'Available').length;
+  const availableCount = allAmbulances.filter((a) => a.status === 'Available' || a.status === 'En Route').length;
 
   const countForType = (typeId) => {
-    if (typeId === 'All') return ambulances.length;
-    return ambulances.filter((a) => a.type?.toLowerCase() === typeId.toLowerCase()).length;
+    if (typeId === 'All') return allAmbulances.length;
+    return allAmbulances.filter((a) => a.type?.toLowerCase() === typeId.toLowerCase()).length;
+  };
+
+  const handleMapClick = (coords) => {
+    setManualLocation(coords, 'Pinned by You');
+    setMapCenter([coords.lat, coords.lng]);
   };
 
   return (
@@ -112,14 +150,16 @@ export default function HomePage() {
             center={mapCenter}
             userLocation={location}
             ambulances={filteredAmbulances}
+            driverLocation={liveDriverPos ? { lat: liveDriverPos.lat, lng: liveDriverPos.lng, speed: liveDriverPos.speed } : null}
             onAmbulanceClick={setSelectedAmbulance}
+            onLocationSelect={handleMapClick}
             height="100%"
           />
         </div>
 
         {/* ── High-Priority Floating Controls (Over Leaflet Map z-[1000]) ── */}
         <div
-          className="absolute top-4 left-4 right-4 z-30 pointer-events-none flex flex-col gap-2.5 max-w-xl mx-auto"
+          className="absolute top-4 left-4 right-4 z-30 pointer-events-none flex flex-col gap-2 max-w-xl mx-auto"
           style={{ zIndex: 1000 }}
         >
           {/* Top Bar: Search Input + Status Pill */}
@@ -155,6 +195,40 @@ export default function HomePage() {
             >
               <span className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
               <span>{availableCount} Available</span>
+            </div>
+          </div>
+
+          {/* Current Location Quick Info Bar */}
+          <div
+            className="flex items-center justify-between px-3.5 py-2 rounded-2xl text-xs shadow-md pointer-events-auto backdrop-blur-md"
+            style={{
+              background: 'var(--surface)',
+              border: '1px solid var(--border)',
+            }}
+          >
+            <div className="flex items-center gap-2 truncate">
+              <span className="relative flex h-2.5 w-2.5 shrink-0">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-400 opacity-75"></span>
+                <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-blue-600"></span>
+              </span>
+              <span className="font-semibold text-blue-600 truncate">
+                📍 {location?.label || 'Current Location'}:
+              </span>
+              <span className="font-mono text-gray-500 truncate text-[11px]">
+                {location ? `${location.lat.toFixed(4)}, ${location.lng.toFixed(4)}` : 'Detecting...'}
+              </span>
+            </div>
+
+            <div className="flex items-center gap-2 shrink-0">
+              <button
+                type="button"
+                onClick={getLocation}
+                disabled={geoLoading}
+                className="flex items-center gap-1 text-[11px] font-bold text-blue-600 hover:text-blue-700 bg-blue-50 px-2 py-1 rounded-lg border border-blue-200"
+              >
+                <Navigation size={11} className={geoLoading ? 'animate-spin' : ''} />
+                Locate Me
+              </button>
             </div>
           </div>
 
@@ -220,56 +294,25 @@ export default function HomePage() {
                 {filteredAmbulances.length} units matching <strong style={{ color: 'var(--primary)' }}>{selectedFilter}</strong>
               </p>
             </div>
-            <div style={{ color: 'var(--on-surface-muted)' }}>
-              {sheetExpanded ? <ChevronDown size={20} /> : <ChevronUp size={20} />}
-            </div>
+            <button className="p-1 rounded-lg" style={{ background: 'var(--surface-2)' }}>
+              {sheetExpanded ? <ChevronDown size={18} /> : <ChevronUp size={18} />}
+            </button>
           </div>
         </div>
 
-        {/* Primary Request Action Button */}
-        <div className="px-5 mb-2 shrink-0">
-          <Link
-            href="/request"
-            className="btn-primary w-full justify-center"
-            style={{ textDecoration: 'none', padding: '12px' }}
-          >
-            🚨 Request Ambulance Now
-          </Link>
-        </div>
-
-        {/* Scrollable Ambulance Card List */}
-        <div className="flex-1 px-5 pb-24 overflow-y-auto space-y-2.5 custom-scrollbar">
-          {loading ? (
-            <div className="text-center py-6">
-              <span className="text-2xl animate-spin">🚑</span>
-              <p className="text-xs mt-2" style={{ color: 'var(--on-surface-muted)' }}>
-                Scanning emergency grid...
-              </p>
-            </div>
-          ) : filteredAmbulances.length === 0 ? (
-            <div className="text-center py-8">
-              <span className="text-3xl">🔍</span>
-              <p className="text-xs mt-2 font-semibold" style={{ color: 'var(--on-surface-muted)' }}>
-                No {selectedFilter !== 'All' ? selectedFilter : ''} ambulances found
-              </p>
-              <button
-                onClick={() => setSelectedFilter('All')}
-                className="mt-2 text-xs font-bold underline"
-                style={{ color: 'var(--primary)' }}
-              >
-                Reset Filter to All
-              </button>
-            </div>
-          ) : (
-            filteredAmbulances.map((amb) => (
+        {/* Ambulance horizontal scroll cards */}
+        <div className="flex-1 overflow-x-auto overflow-y-hidden px-4 pb-3 flex gap-3.5 items-center scrollbar-hide">
+          {filteredAmbulances.map((amb) => (
+            <div key={amb._id} className="min-w-[280px] max-w-[310px] shrink-0">
               <AmbulanceCard
-                key={amb._id}
                 ambulance={amb}
-                selected={selectedAmbulance?._id === amb._id}
-                onSelect={setSelectedAmbulance}
+                onSelect={(a) => {
+                  setSelectedAmbulance(a);
+                  setMapCenter([a.location?.lat || a.lat, a.location?.lng || a.lng]);
+                }}
               />
-            ))
-          )}
+            </div>
+          ))}
         </div>
       </div>
 
