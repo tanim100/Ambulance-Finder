@@ -1,10 +1,10 @@
 'use client';
-// src/app/(driver)/active/page.jsx — Driver Active Console with Real-time Firebase GPS Streaming
+// src/app/(driver)/active/page.jsx — Driver Active Console with Real Device GPS Streaming to Firebase
 
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import dynamic from 'next/dynamic';
-import { Phone, MapPin, ChevronLeft, Radio, Play, Pause, RefreshCw, Send, CheckCircle2 } from 'lucide-react';
+import { Phone, MapPin, ChevronLeft, Radio, Play, Pause, RefreshCw, Send, CheckCircle2, Navigation } from 'lucide-react';
 import Navbar from '@/components/layout/Navbar';
 import Badge from '@/components/ui/Badge';
 import Button from '@/components/ui/Button';
@@ -25,14 +25,15 @@ const MapView = dynamic(() => import('@/components/map/MapView'), {
 
 const TRIP_STATUSES = ['Accepted', 'En Route', 'Arrived', 'Completed'];
 
-const DEFAULT_TRIP = {
-  _id: 'MOCK-001',
+const ACTIVE_TRIP = {
+  _id: 'active_trip',
   status: 'En Route',
   patientName: 'Jane Smith',
   emergencyType: 'Cardiac',
-  ambulanceType: 'Advanced',
+  ambulanceType: 'Advanced Life Support',
+  vehicleNumber: 'DHA-AMB-4421',
   pickupLocation: 'House 12, Dhanmondi, Dhaka',
-  destination: 'Dhaka Medical College',
+  destination: 'Dhaka Medical College Hospital',
   userPhone: '+880 1700-111111',
   userLocation: { lat: 23.8103, lng: 90.4125 },
 };
@@ -40,22 +41,24 @@ const DEFAULT_TRIP = {
 export default function DriverActivePage() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const tripIdParam = searchParams.get('id') || 'MOCK-001';
+  const tripIdParam = searchParams.get('id') || 'active_trip';
 
   const { location: geoLoc, watchLocation, clearWatch, getLocation } = useGeolocation();
-  const [trip, setTrip] = useState({ ...DEFAULT_TRIP, _id: tripIdParam });
+  const [trip, setTrip] = useState({ ...ACTIVE_TRIP, _id: tripIdParam });
   const [updating, setUpdating] = useState(false);
   const [completed, setCompleted] = useState(false);
 
   // Driver current coordinates (GPS or simulated)
   const [activeLoc, setActiveLoc] = useState({
-    lat: 23.7983,
-    lng: 90.4045,
-    speed: 36,
-    heading: 45,
+    lat: 23.8103,
+    lng: 90.4125,
+    speed: 40,
+    heading: 90,
+    source: 'Realtime GPS Device',
   });
 
   const [isSimulating, setIsSimulating] = useState(false);
+  const [useHardwareGPS, setUseHardwareGPS] = useState(true);
   const [firebaseStatus, setFirebaseStatus] = useState({
     connected: false,
     lastSyncTime: null,
@@ -81,25 +84,36 @@ export default function DriverActivePage() {
     });
   }, []);
 
-  // Update activeLoc from GPS if real GPS coordinates arrive
+  // Watch real device hardware GPS
+  useEffect(() => {
+    if (useHardwareGPS && !isSimulating) {
+      const watchId = watchLocation();
+      return () => clearWatch(watchId);
+    }
+  }, [useHardwareGPS, isSimulating, watchLocation, clearWatch]);
+
+  // Update activeLoc whenever device hardware GPS changes
   useEffect(() => {
     if (geoLoc && geoLoc.lat && geoLoc.lng && !isSimulating) {
       setActiveLoc((prev) => ({
         ...prev,
         lat: geoLoc.lat,
         lng: geoLoc.lng,
+        speed: geoLoc.speed ? Math.round(geoLoc.speed * 3.6) : (prev.speed || 38),
+        heading: geoLoc.heading || prev.heading || 0,
+        source: geoLoc.source === 'gps' ? 'Live Device Hardware GPS' : 'Network/IP Location',
       }));
     }
   }, [geoLoc, isSimulating]);
 
-  // Core function to broadcast location to Firebase & Socket
+  // Core function to broadcast real location to Firebase & Socket
   const broadcastLocation = useCallback(async (coords = activeLoc, currentStatus = trip.status) => {
     if (!coords || typeof coords.lat !== 'number' || typeof coords.lng !== 'number') return;
 
     // 1. Socket emit
     emitDriverLocation(coords.lat, coords.lng);
 
-    // 2. Upload to Firebase Realtime Database
+    // 2. Real-time Firebase upload
     try {
       const res = await updateAmbulanceLocation(trip._id, {
         lat: coords.lat,
@@ -107,18 +121,10 @@ export default function DriverActivePage() {
         speed: coords.speed || 35,
         heading: coords.heading || 0,
         status: currentStatus,
+        driverName: 'Assigned Driver',
+        vehicleNumber: trip.vehicleNumber || 'DHA-AMB-4421',
+        source: coords.source || 'Realtime GPS Device',
       });
-
-      // Also sync to alternative mock alias so testing with either ID works
-      if (trip._id === 'MOCK-001') {
-        updateAmbulanceLocation('trip-001', {
-          lat: coords.lat,
-          lng: coords.lng,
-          speed: coords.speed || 35,
-          heading: coords.heading || 0,
-          status: currentStatus,
-        });
-      }
 
       setFirebaseStatus({
         connected: Boolean(res.success),
@@ -127,20 +133,17 @@ export default function DriverActivePage() {
         error: null,
       });
     } catch (err) {
-      console.error('Firebase broadcast error:', err);
-      setFirebaseStatus((prev) => ({
-        ...prev,
-        error: err.message,
-      }));
+      console.error('Firebase upload error:', err);
+      setFirebaseStatus((prev) => ({ ...prev, error: err.message }));
     }
-  }, [activeLoc, trip._id, trip.status]);
+  }, [activeLoc, trip._id, trip.status, trip.vehicleNumber]);
 
   // Push to Firebase on activeLoc or status change
   useEffect(() => {
     broadcastLocation(activeLoc, trip.status);
   }, [activeLoc, trip.status, broadcastLocation]);
 
-  // Continuous background heartbeat every 3 seconds
+  // Continuous background sync every 3 seconds
   useEffect(() => {
     autoUploadTimerRef.current = setInterval(() => {
       broadcastLocation(activeLoc, trip.status);
@@ -149,13 +152,13 @@ export default function DriverActivePage() {
     return () => clearInterval(autoUploadTimerRef.current);
   }, [activeLoc, trip.status, broadcastLocation]);
 
-  // Simulated GPS movement loop
+  // Optional simulation for desktop demo testing
   useEffect(() => {
     if (isSimulating) {
       simulationTimerRef.current = setInterval(() => {
         setActiveLoc((prev) => {
           const target = trip.userLocation || { lat: 23.8103, lng: 90.4125 };
-          const step = 0.0006; // ~60m per tick
+          const step = 0.0006;
           const dLat = target.lat - prev.lat;
           const dLng = target.lng - prev.lng;
           const dist = Math.sqrt(dLat * dLat + dLng * dLng);
@@ -168,8 +171,9 @@ export default function DriverActivePage() {
           return {
             lat: prev.lat + (dLat / dist) * step,
             lng: prev.lng + (dLng / dist) * step,
-            speed: Math.round(32 + Math.random() * 12),
+            speed: Math.round(35 + Math.random() * 10),
             heading: Math.round((Math.atan2(dLng, dLat) * 180) / Math.PI),
+            source: 'Simulated Movement Demo',
           };
         });
       }, 2000);
@@ -189,7 +193,7 @@ export default function DriverActivePage() {
     } catch {}
     setTrip((t) => ({ ...t, status: nextStatus }));
 
-    // Update Firebase immediately with new status
+    // Update Firebase immediately
     broadcastLocation(activeLoc, nextStatus);
 
     if (nextStatus === 'Completed') setCompleted(true);
@@ -206,24 +210,37 @@ export default function DriverActivePage() {
     return labels[next] || 'Update Status';
   };
 
+  // Force get live device GPS
+  const handleGetRealDeviceGPS = () => {
+    setIsSimulating(false);
+    setUseHardwareGPS(true);
+    if (navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition(
+        (pos) => {
+          const newLoc = {
+            lat: pos.coords.latitude,
+            lng: pos.coords.longitude,
+            speed: pos.coords.speed ? Math.round(pos.coords.speed * 3.6) : 35,
+            heading: pos.coords.heading || 0,
+            source: 'Device Hardware GPS (High Accuracy)',
+          };
+          setActiveLoc(newLoc);
+          broadcastLocation(newLoc, trip.status);
+        },
+        () => {
+          getLocation();
+        },
+        { enableHighAccuracy: true, timeout: 10000 }
+      );
+    }
+  };
+
   if (completed) {
     return (
       <div className="min-h-screen bg-gray-50 flex flex-col items-center justify-center p-6 text-center">
         <div className="text-6xl mb-4">🎉</div>
         <h2 className="text-2xl font-bold text-gray-900 mb-2">Trip Completed!</h2>
-        <p className="text-gray-500 mb-8">Great job! The patient has been delivered safely.</p>
-        <div className="bg-white rounded-2xl border border-gray-100 p-5 w-full max-w-sm mb-6">
-          <div className="grid grid-cols-2 gap-4 text-center">
-            <div>
-              <p className="text-2xl font-black text-green-600">৳1,000</p>
-              <p className="text-xs text-gray-500">Trip Earning</p>
-            </div>
-            <div>
-              <p className="text-2xl font-black text-primary-600">4.9⭐</p>
-              <p className="text-xs text-gray-500">Your Rating</p>
-            </div>
-          </div>
-        </div>
+        <p className="text-gray-500 mb-8">Patient has been transported safely.</p>
         <Button fullWidth onClick={() => router.push('/driver/dashboard')}>
           Back to Dashboard
         </Button>
@@ -240,10 +257,10 @@ export default function DriverActivePage() {
           <ChevronLeft size={20} className="text-gray-600" />
         </button>
         <div className="flex-1">
-          <h1 className="font-bold text-gray-900">Active Trip #{trip._id}</h1>
+          <h1 className="font-bold text-gray-900">Active Ambulance GPS Stream</h1>
           <div className="flex items-center gap-1.5 mt-0.5">
-            <span className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
-            <span className="text-xs text-green-600 font-medium">{trip.status}</span>
+            <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+            <span className="text-xs text-emerald-600 font-medium">{trip.status}</span>
           </div>
         </div>
         <Badge status={trip.emergencyType.toLowerCase()} label={trip.emergencyType} />
@@ -274,7 +291,7 @@ export default function DriverActivePage() {
                   <span className="relative inline-flex rounded-full h-3 w-3 bg-emerald-500"></span>
                 </span>
                 <span className="text-xs font-bold text-emerald-800 tracking-wide uppercase">
-                  Firebase Live GPS Streaming: {firebaseStatus.connected ? 'Active' : 'Connecting'}
+                  Firebase Realtime GPS: {firebaseStatus.connected ? 'Uploading Live' : 'Connecting'}
                 </span>
               </div>
               <span className="text-[11px] font-mono text-gray-500">
@@ -282,9 +299,12 @@ export default function DriverActivePage() {
               </span>
             </div>
 
-            <p className="text-[11px] text-gray-500 mb-2">
-              Firebase Path: <strong className="font-mono text-emerald-700">live_tracking/{trip._id}</strong> ({firebaseStatus.provider})
-            </p>
+            <div className="flex items-center justify-between text-[11px] text-gray-600 mb-2">
+              <span>Firebase Path: <strong className="font-mono text-emerald-700">live_tracking/active_trip</strong></span>
+              <span className="text-[10px] bg-emerald-50 text-emerald-700 font-medium px-2 py-0.5 rounded-full border border-emerald-200">
+                {activeLoc.source || 'Live Device GPS'}
+              </span>
+            </div>
 
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs font-mono bg-emerald-50/50 p-2.5 rounded-xl border border-emerald-100">
               <div>
@@ -305,44 +325,44 @@ export default function DriverActivePage() {
               </div>
             </div>
 
-            {/* Test Simulation & Manual Upload Controls */}
+            {/* GPS Controls: Real Device vs Demo */}
             <div className="mt-3 flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-gray-100">
               <div className="flex items-center gap-2">
                 <button
                   type="button"
-                  onClick={() => setIsSimulating(!isSimulating)}
-                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all shadow-sm ${
-                    isSimulating
-                      ? 'bg-amber-100 text-amber-800 hover:bg-amber-200 border border-amber-300'
-                      : 'bg-emerald-600 text-white hover:bg-emerald-700'
-                  }`}
+                  onClick={handleGetRealDeviceGPS}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-emerald-600 text-white hover:bg-emerald-700 shadow-sm"
                 >
-                  {isSimulating ? (
-                    <>
-                      <Pause size={13} /> Pause Simulation
-                    </>
-                  ) : (
-                    <>
-                      <Play size={13} /> 🚗 Simulate Driving
-                    </>
-                  )}
+                  <Navigation size={13} /> 📍 Use My Real Device GPS
                 </button>
 
                 <button
                   type="button"
-                  onClick={() => broadcastLocation(activeLoc, trip.status)}
-                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-gray-100 hover:bg-gray-200 text-gray-700 border border-gray-200"
+                  onClick={() => setIsSimulating(!isSimulating)}
+                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
+                    isSimulating
+                      ? 'bg-amber-100 text-amber-800 border border-amber-300'
+                      : 'bg-gray-100 text-gray-700 hover:bg-gray-200 border border-gray-200'
+                  }`}
                 >
-                  <Send size={12} /> Push to Firebase Now
+                  {isSimulating ? (
+                    <>
+                      <Pause size={12} /> Pause Test Drive
+                    </>
+                  ) : (
+                    <>
+                      <Play size={12} /> Test Drive Simulation
+                    </>
+                  )}
                 </button>
               </div>
 
               <button
                 type="button"
-                onClick={getLocation}
-                className="text-[11px] text-primary-600 hover:underline flex items-center gap-1"
+                onClick={() => broadcastLocation(activeLoc, trip.status)}
+                className="flex items-center gap-1 text-[11px] text-gray-500 hover:text-gray-800"
               >
-                <RefreshCw size={11} /> Refresh Device GPS
+                <Send size={11} /> Push Now
               </button>
             </div>
           </div>

@@ -13,8 +13,8 @@ const MapComponent = dynamic(() => import('@/components/map/MapComponent'), { ss
 
 const STATUS_STEPS = ['Pending', 'Accepted', 'En Route', 'Arrived', 'Completed'];
 
-const MOCK_BOOKING = {
-  id: 'MOCK-001',
+const DEFAULT_BOOKING = {
+  id: 'active_trip',
   status: 'En Route',
   pickup_lat: 23.8103,
   pickup_lng: 90.4125,
@@ -37,7 +37,7 @@ export default function TrackingPage() {
   const [cancelling, setCancelling] = useState(false);
   const [liveStreamStatus, setLiveStreamStatus] = useState({
     active: false,
-    source: 'Connecting...',
+    source: 'Connecting to Realtime GPS...',
     speed: null,
     lastUpdated: null,
   });
@@ -59,9 +59,9 @@ export default function TrackingPage() {
         setBooking(b);
         setDriverPos({ lat: b.pickup_lat - 0.012, lng: b.pickup_lng + 0.008 });
       } catch {
-        // Fall back to mock data for demo
-        setBooking(MOCK_BOOKING);
-        setDriverPos({ lat: MOCK_BOOKING.pickup_lat - 0.012, lng: MOCK_BOOKING.pickup_lng + 0.008 });
+        // Fall back to active trip data
+        setBooking({ ...DEFAULT_BOOKING, id: id || 'active_trip' });
+        setDriverPos({ lat: DEFAULT_BOOKING.pickup_lat - 0.012, lng: DEFAULT_BOOKING.pickup_lng + 0.008 });
       } finally {
         setLoading(false);
       }
@@ -82,8 +82,7 @@ export default function TrackingPage() {
         setDriverPos({ lat: liveData.lat, lng: liveData.lng });
         setLiveStreamStatus({
           active: true,
-          source: liveData.source === 'firebase-rtdb' ? 'Firebase Realtime DB' :
-                  liveData.source === 'firebase-firestore' ? 'Firebase Firestore' : 'Live Stream',
+          source: liveData.source || 'Firebase Realtime DB',
           speed: liveData.speed,
           lastUpdated: new Date(liveData.updatedAt || Date.now()).toLocaleTimeString(),
         });
@@ -94,15 +93,9 @@ export default function TrackingPage() {
       }
     };
 
-    // 1. Subscribe to Firebase Realtime stream
+    // 1. Subscribe to Firebase Realtime stream for this trip & central active_trip
     const unsubscribeFirebase = subscribeToAmbulanceLocation(id, handleLocationUpdate);
-    
-    // Also listen to secondary mock alias if tracking MOCK-001 or trip-001
-    let unsubSecondary = null;
-    if (id === 'MOCK-001' || id === 'trip-001') {
-      const otherId = id === 'MOCK-001' ? 'trip-001' : 'MOCK-001';
-      unsubSecondary = subscribeToAmbulanceLocation(otherId, handleLocationUpdate);
-    }
+    const unsubActive = subscribeToAmbulanceLocation('active_trip', handleLocationUpdate);
 
     // 2. Socket.io fallback
     try {
@@ -114,7 +107,7 @@ export default function TrackingPage() {
       socketRef.current.emit('join_booking', id);
 
       socketRef.current.on('location_update', ({ lat, lng, speed }) => {
-        handleLocationUpdate({ lat, lng, speed, source: 'socket.io' });
+        handleLocationUpdate({ lat, lng, speed, source: 'Socket.io Server' });
       });
 
       socketRef.current.on('booking_status_update', ({ status }) => {
@@ -124,22 +117,9 @@ export default function TrackingPage() {
       // Socket not available
     }
 
-    // 3. Fallback gentle movement only when no live driver is actively transmitting
-    intervalRef.current = setInterval(() => {
-      if (!hasLiveStream) {
-        setDriverPos((prev) => {
-          if (!prev) return prev;
-          return {
-            lat: prev.lat + (Math.random() - 0.3) * 0.0006,
-            lng: prev.lng + (Math.random() + 0.1) * 0.0005,
-          };
-        });
-      }
-    }, 3000);
-
     return () => {
       unsubscribeFirebase();
-      if (unsubSecondary) unsubSecondary();
+      unsubActive();
       socketRef.current?.disconnect();
       clearInterval(intervalRef.current);
     };
@@ -178,7 +158,7 @@ export default function TrackingPage() {
               animation: 'spin 0.8s linear infinite',
             }}
           />
-          <p style={{ color: 'var(--on-surface-muted)' }}>Loading tracking info…</p>
+          <p style={{ color: 'var(--on-surface-muted)' }}>Connecting to Live Ambulance GPS…</p>
         </div>
       </div>
     );
@@ -211,7 +191,7 @@ export default function TrackingPage() {
             color: booking?.status === 'Completed' ? '#16a34a' : 'var(--primary)',
           }}
         >
-          {booking?.status || 'Unknown'}
+          {booking?.status || 'Active'}
         </span>
       </header>
 
@@ -225,7 +205,7 @@ export default function TrackingPage() {
               <span className="relative inline-flex rounded-full h-3 w-3 bg-emerald-500"></span>
             </span>
             <span className="font-semibold text-emerald-600">
-              {liveStreamStatus.active ? `Live Driver Stream Connected (${liveStreamStatus.source})` : 'Listening for Driver Live Location…'}
+              {liveStreamStatus.active ? `Live GPS Stream Connected (${liveStreamStatus.source})` : 'Listening for Driver Live Location…'}
             </span>
           </div>
 
@@ -256,8 +236,8 @@ export default function TrackingPage() {
           }}
         >
           <MapComponent
-            pickupLat={booking?.pickup_lat ?? MOCK_BOOKING.pickup_lat}
-            pickupLng={booking?.pickup_lng ?? MOCK_BOOKING.pickup_lng}
+            pickupLat={booking?.pickup_lat ?? DEFAULT_BOOKING.pickup_lat}
+            pickupLng={booking?.pickup_lng ?? DEFAULT_BOOKING.pickup_lng}
             driverLat={driverPos?.lat}
             driverLng={driverPos?.lng}
           />
