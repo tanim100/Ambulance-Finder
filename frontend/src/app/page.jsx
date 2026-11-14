@@ -345,9 +345,6 @@ export default function LandingPage() {
           <h2 className="text-3xl sm:text-4xl font-black text-slate-950 dark:text-white tracking-tight mt-2">
             Every Emergency Needs The Right Ambulance
           </h2>
-          <p className="text-slate-500 dark:text-slate-400 text-sm sm:text-base mt-3">
-            From basic oxygen support to mobile ICU ventilators, every vehicle is certified by healthcare authorities.
-          </p>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
