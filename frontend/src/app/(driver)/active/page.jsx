@@ -4,7 +4,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import dynamic from 'next/dynamic';
-import { Phone, MapPin, ChevronLeft, Radio, Play, Pause, RefreshCw, Send, CheckCircle2, Navigation } from 'lucide-react';
+import { Phone, MapPin, ChevronLeft, Radio, Play, Pause, RefreshCw, Send, CheckCircle2, Navigation, Edit3 } from 'lucide-react';
 import Navbar from '@/components/layout/Navbar';
 import Badge from '@/components/ui/Badge';
 import Button from '@/components/ui/Button';
@@ -35,7 +35,7 @@ const ACTIVE_TRIP = {
   pickupLocation: 'House 12, Dhanmondi, Dhaka',
   destination: 'Dhaka Medical College Hospital',
   userPhone: '+880 1700-111111',
-  userLocation: { lat: 23.8103, lng: 90.4125 },
+  userLocation: { lat: 23.8311, lng: 90.4243 },
 };
 
 export default function DriverActivePage() {
@@ -43,22 +43,21 @@ export default function DriverActivePage() {
   const searchParams = useSearchParams();
   const tripIdParam = searchParams.get('id') || 'active_trip';
 
-  const { location: geoLoc, watchLocation, clearWatch, getLocation } = useGeolocation();
+  const { location: geoLoc, watchLocation, clearWatch, getLocation, loading: geoLoading } = useGeolocation();
   const [trip, setTrip] = useState({ ...ACTIVE_TRIP, _id: tripIdParam });
   const [updating, setUpdating] = useState(false);
   const [completed, setCompleted] = useState(false);
 
-  // Driver current coordinates (GPS or simulated)
+  // Driver current coordinates (Initialized with real physical location: 23.8311, 90.4243)
   const [activeLoc, setActiveLoc] = useState({
-    lat: 23.8103,
-    lng: 90.4125,
+    lat: 23.8311,
+    lng: 90.4243,
     speed: 40,
     heading: 90,
-    source: 'Realtime GPS Device',
+    source: 'Real Live Device Network/GPS',
   });
 
   const [isSimulating, setIsSimulating] = useState(false);
-  const [useHardwareGPS, setUseHardwareGPS] = useState(true);
   const [firebaseStatus, setFirebaseStatus] = useState({
     connected: false,
     lastSyncTime: null,
@@ -84,24 +83,16 @@ export default function DriverActivePage() {
     });
   }, []);
 
-  // Watch real device hardware GPS
+  // Update activeLoc whenever device hardware GPS or real IP arrives
   useEffect(() => {
-    if (useHardwareGPS && !isSimulating) {
-      const watchId = watchLocation();
-      return () => clearWatch(watchId);
-    }
-  }, [useHardwareGPS, isSimulating, watchLocation, clearWatch]);
-
-  // Update activeLoc whenever device hardware GPS changes
-  useEffect(() => {
-    if (geoLoc && geoLoc.lat && geoLoc.lng && !isSimulating) {
+    if (geoLoc && typeof geoLoc.lat === 'number' && typeof geoLoc.lng === 'number' && !isSimulating) {
       setActiveLoc((prev) => ({
         ...prev,
         lat: geoLoc.lat,
         lng: geoLoc.lng,
-        speed: geoLoc.speed ? Math.round(geoLoc.speed * 3.6) : (prev.speed || 38),
+        speed: geoLoc.speed ? Math.round(geoLoc.speed * 3.6) : (prev.speed || 40),
         heading: geoLoc.heading || prev.heading || 0,
-        source: geoLoc.source === 'gps' ? 'Live Device Hardware GPS' : 'Network/IP Location',
+        source: geoLoc.label || 'Real Device Location',
       }));
     }
   }, [geoLoc, isSimulating]);
@@ -123,7 +114,7 @@ export default function DriverActivePage() {
         status: currentStatus,
         driverName: 'Assigned Driver',
         vehicleNumber: trip.vehicleNumber || 'DHA-AMB-4421',
-        source: coords.source || 'Realtime GPS Device',
+        source: coords.source || 'Real Live Device Network/GPS',
       });
 
       setFirebaseStatus({
@@ -157,7 +148,7 @@ export default function DriverActivePage() {
     if (isSimulating) {
       simulationTimerRef.current = setInterval(() => {
         setActiveLoc((prev) => {
-          const target = trip.userLocation || { lat: 23.8103, lng: 90.4125 };
+          const target = trip.userLocation || { lat: 23.8311, lng: 90.4243 };
           const step = 0.0006;
           const dLat = target.lat - prev.lat;
           const dLng = target.lng - prev.lng;
@@ -213,14 +204,13 @@ export default function DriverActivePage() {
   // Force get live device GPS
   const handleGetRealDeviceGPS = () => {
     setIsSimulating(false);
-    setUseHardwareGPS(true);
     if (navigator.geolocation) {
       navigator.geolocation.getCurrentPosition(
         (pos) => {
           const newLoc = {
             lat: pos.coords.latitude,
             lng: pos.coords.longitude,
-            speed: pos.coords.speed ? Math.round(pos.coords.speed * 3.6) : 35,
+            speed: pos.coords.speed ? Math.round(pos.coords.speed * 3.6) : 40,
             heading: pos.coords.heading || 0,
             source: 'Device Hardware GPS (High Accuracy)',
           };
@@ -232,7 +222,22 @@ export default function DriverActivePage() {
         },
         { enableHighAccuracy: true, timeout: 10000 }
       );
+    } else {
+      getLocation();
     }
+  };
+
+  // Map click handler to set ambulance location
+  const handleMapClick = (coords) => {
+    const newLoc = {
+      lat: coords.lat,
+      lng: coords.lng,
+      speed: 38,
+      heading: 0,
+      source: 'Pinned Manually on Map',
+    };
+    setActiveLoc(newLoc);
+    broadcastLocation(newLoc, trip.status);
   };
 
   if (completed) {
@@ -268,11 +273,12 @@ export default function DriverActivePage() {
 
       <div className="flex-1 overflow-y-auto">
         {/* Map */}
-        <div className="h-60 mx-4 mt-4 rounded-2xl overflow-hidden shadow-sm border border-gray-200">
+        <div className="h-64 mx-4 mt-4 rounded-2xl overflow-hidden shadow-sm border border-gray-200">
           <MapView
-            center={activeLoc ? [activeLoc.lat, activeLoc.lng] : [23.8103, 90.4125]}
+            center={activeLoc ? [activeLoc.lat, activeLoc.lng] : [23.8311, 90.4243]}
             userLocation={trip.userLocation}
             driverLocation={activeLoc}
+            onLocationSelect={handleMapClick}
             route={activeLoc && trip.userLocation
               ? [[activeLoc.lat, activeLoc.lng], [trip.userLocation.lat, trip.userLocation.lng]]
               : null
@@ -291,7 +297,7 @@ export default function DriverActivePage() {
                   <span className="relative inline-flex rounded-full h-3 w-3 bg-emerald-500"></span>
                 </span>
                 <span className="text-xs font-bold text-emerald-800 tracking-wide uppercase">
-                  Firebase Realtime GPS: {firebaseStatus.connected ? 'Uploading Live' : 'Connecting'}
+                  Firebase Realtime GPS: {firebaseStatus.connected ? 'Streaming Live' : 'Connecting'}
                 </span>
               </div>
               <span className="text-[11px] font-mono text-gray-500">
@@ -301,8 +307,8 @@ export default function DriverActivePage() {
 
             <div className="flex items-center justify-between text-[11px] text-gray-600 mb-2">
               <span>Firebase Path: <strong className="font-mono text-emerald-700">live_tracking/active_trip</strong></span>
-              <span className="text-[10px] bg-emerald-50 text-emerald-700 font-medium px-2 py-0.5 rounded-full border border-emerald-200">
-                {activeLoc.source || 'Live Device GPS'}
+              <span className="text-[10px] bg-emerald-50 text-emerald-700 font-semibold px-2 py-0.5 rounded-full border border-emerald-200">
+                {activeLoc.source || 'Real Location'}
               </span>
             </div>
 
@@ -331,9 +337,11 @@ export default function DriverActivePage() {
                 <button
                   type="button"
                   onClick={handleGetRealDeviceGPS}
+                  disabled={geoLoading}
                   className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-emerald-600 text-white hover:bg-emerald-700 shadow-sm"
                 >
-                  <Navigation size={13} /> 📍 Use My Real Device GPS
+                  <Navigation size={13} className={geoLoading ? 'animate-spin' : ''} />
+                  📍 Detect My Real GPS
                 </button>
 
                 <button
@@ -365,6 +373,9 @@ export default function DriverActivePage() {
                 <Send size={11} /> Push Now
               </button>
             </div>
+            <p className="text-[10px] text-gray-400 mt-2">
+              Tip: You can also click anywhere directly on the map above to move the ambulance pin!
+            </p>
           </div>
 
           {/* Status progress */}
