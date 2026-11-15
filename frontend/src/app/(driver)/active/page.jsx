@@ -13,6 +13,8 @@ import { driverAPI } from '@/lib/api';
 import { useGeolocation } from '@/hooks/useGeolocation';
 import { emitDriverLocation } from '@/lib/socket';
 import { updateAmbulanceLocation, testFirebaseConnection } from '@/lib/firebaseTracking';
+import { rtdb } from '@/lib/firebase';
+import { ref, onValue, off } from 'firebase/database';
 
 const MapView = dynamic(() => import('@/components/map/MapView'), {
   ssr: false,
@@ -35,7 +37,7 @@ const ACTIVE_TRIP = {
   pickupLocation: 'House 12, Dhanmondi, Dhaka',
   destination: 'Dhaka Medical College Hospital',
   userPhone: '+880 1700-111111',
-  userLocation: { lat: 23.8311, lng: 90.4243 },
+  userLocation: { lat: 23.8103, lng: 90.4125 },
 };
 
 export default function DriverActivePage() {
@@ -48,10 +50,10 @@ export default function DriverActivePage() {
   const [updating, setUpdating] = useState(false);
   const [completed, setCompleted] = useState(false);
 
-  // Driver current coordinates (Initialized with real physical location: 23.8311, 90.4243)
+  // Driver current coordinates
   const [activeLoc, setActiveLoc] = useState({
-    lat: 23.8311,
-    lng: 90.4243,
+    lat: 23.8103,
+    lng: 90.4125,
     speed: 40,
     heading: 90,
     source: 'Real Live Device Network/GPS',
@@ -83,7 +85,26 @@ export default function DriverActivePage() {
     });
   }, []);
 
-  // Update activeLoc whenever device hardware GPS or real IP arrives
+  // Listen to patient exact location from Firebase
+  useEffect(() => {
+    if (!rtdb) return;
+    try {
+      const patientRef = ref(rtdb, 'live_tracking/active_trip/patient');
+      const unsub = onValue(patientRef, (snap) => {
+        const val = snap.val();
+        if (val && typeof val.patientLat === 'number' && typeof val.patientLng === 'number') {
+          setTrip((prev) => ({
+            ...prev,
+            userLocation: { lat: val.patientLat, lng: val.patientLng },
+            pickupLocation: val.pickupAddress || prev.pickupLocation,
+          }));
+        }
+      });
+      return () => off(patientRef);
+    } catch {}
+  }, []);
+
+  // Update activeLoc whenever device hardware GPS or location arrives
   useEffect(() => {
     if (geoLoc && typeof geoLoc.lat === 'number' && typeof geoLoc.lng === 'number' && !isSimulating) {
       setActiveLoc((prev) => ({
@@ -143,12 +164,12 @@ export default function DriverActivePage() {
     return () => clearInterval(autoUploadTimerRef.current);
   }, [activeLoc, trip.status, broadcastLocation]);
 
-  // Optional simulation for desktop demo testing
+  // Simulated GPS movement loop towards the patient
   useEffect(() => {
     if (isSimulating) {
       simulationTimerRef.current = setInterval(() => {
         setActiveLoc((prev) => {
-          const target = trip.userLocation || { lat: 23.8311, lng: 90.4243 };
+          const target = trip.userLocation || { lat: 23.8103, lng: 90.4125 };
           const step = 0.0006;
           const dLat = target.lat - prev.lat;
           const dLng = target.lng - prev.lng;
@@ -220,7 +241,7 @@ export default function DriverActivePage() {
         () => {
           getLocation();
         },
-        { enableHighAccuracy: true, timeout: 10000 }
+        { enableHighAccuracy: true, timeout: 8000 }
       );
     } else {
       getLocation();
@@ -275,7 +296,7 @@ export default function DriverActivePage() {
         {/* Map */}
         <div className="h-64 mx-4 mt-4 rounded-2xl overflow-hidden shadow-sm border border-gray-200">
           <MapView
-            center={activeLoc ? [activeLoc.lat, activeLoc.lng] : [23.8311, 90.4243]}
+            center={activeLoc ? [activeLoc.lat, activeLoc.lng] : [23.8103, 90.4125]}
             userLocation={trip.userLocation}
             driverLocation={activeLoc}
             onLocationSelect={handleMapClick}
@@ -341,7 +362,7 @@ export default function DriverActivePage() {
                   className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-emerald-600 text-white hover:bg-emerald-700 shadow-sm"
                 >
                   <Navigation size={13} className={geoLoading ? 'animate-spin' : ''} />
-                  📍 Detect My Real GPS
+                  📍 Detect My Exact GPS
                 </button>
 
                 <button

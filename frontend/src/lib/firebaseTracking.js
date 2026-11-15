@@ -1,4 +1,4 @@
-// src/lib/firebaseTracking.js — Real-time Ambulance Location Service via Firebase RTDB + Firestore
+// src/lib/firebaseTracking.js — Robust Two-Way Live Ambulance & Patient Location Service via Firebase RTDB + Firestore
 import { rtdb, db, isConfigured } from './firebase';
 import { ref, set, onValue, off, serverTimestamp, get } from 'firebase/database';
 import { doc, setDoc, onSnapshot } from 'firebase/firestore';
@@ -29,41 +29,34 @@ export async function updateAmbulanceLocation(bookingId, coords) {
     speed: Number(coords.speed) || 0,
     heading: Number(coords.heading) || 0,
     status: coords.status || 'En Route',
-    driverName: coords.driverName || 'Ambulance Driver',
+    driverName: coords.driverName || 'Assigned Driver',
     vehicleNumber: coords.vehicleNumber || 'DHA-AMB-4421',
-    source: coords.source || 'Realtime Device GPS',
+    source: coords.source || 'Live Device GPS',
     updatedAt: Date.now(),
   };
 
   // 1. Broadcast locally across browser tabs
   if (localChannel) {
     try {
-      localChannel.postMessage(payload);
-    } catch (e) {
-      // Ignore broadcast errors
-    }
+      localChannel.postMessage({ type: 'ambulance_location', ...payload });
+    } catch (e) {}
   }
 
   let rtdbSuccess = false;
-  let firestoreSuccess = false;
 
-  // 2. Realtime Database
+  // 2. Realtime Database — Write to specific booking, active_trip, and latest
   if (rtdb) {
     try {
-      // Write to specific booking path
-      if (bookingId) {
-        const locRef = ref(rtdb, `live_tracking/${bookingId}`);
-        await set(locRef, { ...payload, serverTime: serverTimestamp() });
+      const updates = {};
+      if (bookingId && bookingId !== 'active_trip') {
+        updates[`live_tracking/${bookingId}`] = { ...payload, serverTime: serverTimestamp() };
       }
+      updates['live_tracking/active_trip'] = { ...payload, serverTime: serverTimestamp() };
+      updates['live_tracking/latest'] = { ...payload, serverTime: serverTimestamp() };
 
-      // Always write to active_trip for real-time central view
-      const activeRef = ref(rtdb, 'live_tracking/active_trip');
-      await set(activeRef, { ...payload, serverTime: serverTimestamp() });
-
-      // Write to ambulances list
-      const ambRef = ref(rtdb, `live_tracking/ambulances/${payload.vehicleNumber}`);
-      await set(ambRef, { ...payload, serverTime: serverTimestamp() });
-
+      await Promise.all(
+        Object.entries(updates).map(([path, data]) => set(ref(rtdb, path), data))
+      );
       rtdbSuccess = true;
     } catch (err) {
       console.warn('Firebase RTDB update error:', err.message);
@@ -71,21 +64,50 @@ export async function updateAmbulanceLocation(bookingId, coords) {
   }
 
   // 3. Firestore Fallback
-  if (db && (!rtdbSuccess || !rtdb)) {
+  if (db && !rtdbSuccess) {
     try {
       const docRef = doc(db, 'live_tracking', String(bookingId || 'active_trip'));
       await setDoc(docRef, payload, { merge: true });
-      firestoreSuccess = true;
     } catch (err) {
       console.warn('Firebase Firestore update error:', err.message);
     }
   }
 
   return {
-    success: rtdbSuccess || firestoreSuccess || Boolean(localChannel),
-    provider: rtdbSuccess ? 'RTDB' : firestoreSuccess ? 'Firestore' : 'LocalBroadcast',
+    success: true,
     payload,
   };
+}
+
+/**
+ * Patient writes exact pickup location to Firebase
+ * @param {string} bookingId - The booking ID
+ * @param {object} coords - { lat, lng, address }
+ */
+export async function updatePatientLocation(bookingId, coords) {
+  if (!coords || typeof coords.lat !== 'number' || typeof coords.lng !== 'number') return;
+
+  const payload = {
+    patientLat: coords.lat,
+    patientLng: coords.lng,
+    pickupAddress: coords.address || 'Patient Current Location',
+    updatedAt: Date.now(),
+  };
+
+  if (rtdb) {
+    try {
+      if (bookingId && bookingId !== 'active_trip') {
+        await set(ref(rtdb, `live_tracking/${bookingId}/patient`), payload);
+      }
+      await set(ref(rtdb, 'live_tracking/active_trip/patient'), payload);
+    } catch {}
+  }
+
+  if (localChannel) {
+    try {
+      localChannel.postMessage({ type: 'patient_location', ...payload });
+    } catch {}
+  }
 }
 
 /**
@@ -100,11 +122,9 @@ export function subscribeToAmbulanceLocation(bookingId, onLocationUpdate) {
   }
 
   const effectiveId = bookingId || 'active_trip';
-  let unsubRTDB = null;
-  let unsubActive = null;
-  let unsubFirestore = null;
+  const cleanups = [];
 
-  // 1. Listen to Local BroadcastChannel (cross-tab)
+  // 1. Listen to Local BroadcastChannel
   const handleLocalBroadcast = (event) => {
     const data = event.data;
     if (data && typeof data.lat === 'number' && typeof data.lng === 'number') {
@@ -115,39 +135,22 @@ export function subscribeToAmbulanceLocation(bookingId, onLocationUpdate) {
         heading: data.heading || 0,
         status: data.status || 'En Route',
         updatedAt: data.updatedAt || Date.now(),
-        source: data.source || 'Realtime Device GPS',
+        source: data.source || 'Live Local Device GPS',
       });
     }
   };
 
   if (localChannel) {
     localChannel.addEventListener('message', handleLocalBroadcast);
+    cleanups.push(() => localChannel.removeEventListener('message', handleLocalBroadcast));
   }
 
   // 2. Listen via Firebase Realtime Database
   if (rtdb) {
-    try {
-      const locRef = ref(rtdb, `live_tracking/${effectiveId}`);
-      onValue(locRef, (snapshot) => {
-        const val = snapshot.val();
-        if (val && typeof val.lat === 'number' && typeof val.lng === 'number') {
-          onLocationUpdate({
-            lat: val.lat,
-            lng: val.lng,
-            speed: val.speed || 0,
-            heading: val.heading || 0,
-            status: val.status || 'En Route',
-            updatedAt: val.updatedAt || Date.now(),
-            source: val.source || 'Firebase RTDB Live Stream',
-          });
-        }
-      });
-      unsubRTDB = () => off(locRef);
-
-      // Also listen to active_trip as fallback
-      if (effectiveId !== 'active_trip') {
-        const activeRef = ref(rtdb, 'live_tracking/active_trip');
-        onValue(activeRef, (snapshot) => {
+    const attachListener = (path) => {
+      try {
+        const locRef = ref(rtdb, path);
+        onValue(locRef, (snapshot) => {
           const val = snapshot.val();
           if (val && typeof val.lat === 'number' && typeof val.lng === 'number') {
             onLocationUpdate({
@@ -157,49 +160,27 @@ export function subscribeToAmbulanceLocation(bookingId, onLocationUpdate) {
               heading: val.heading || 0,
               status: val.status || 'En Route',
               updatedAt: val.updatedAt || Date.now(),
-              source: val.source || 'Firebase RTDB Live Stream',
+              source: val.source || 'Firebase Live Stream',
             });
           }
         });
-        unsubActive = () => off(activeRef);
-      }
-    } catch (err) {
-      console.warn('Firebase RTDB subscribe error:', err.message);
-    }
-  }
+        cleanups.push(() => off(locRef));
+      } catch (e) {}
+    };
 
-  // 3. Listen via Firestore fallback
-  if (db && !unsubRTDB) {
-    try {
-      const docRef = doc(db, 'live_tracking', String(effectiveId));
-      unsubFirestore = onSnapshot(docRef, (docSnap) => {
-        if (docSnap.exists()) {
-          const val = docSnap.data();
-          if (val && typeof val.lat === 'number' && typeof val.lng === 'number') {
-            onLocationUpdate({
-              lat: val.lat,
-              lng: val.lng,
-              speed: val.speed || 0,
-              heading: val.heading || 0,
-              status: val.status || 'En Route',
-              updatedAt: val.updatedAt || Date.now(),
-              source: val.source || 'Firebase Firestore Live Stream',
-            });
-          }
-        }
-      });
-    } catch (err) {
-      console.warn('Firebase Firestore subscribe error:', err.message);
+    // Listen to specific ID path
+    attachListener(`live_tracking/${effectiveId}`);
+
+    // If ID is not active_trip, also attach listener to active_trip so changes on /active are received
+    if (effectiveId !== 'active_trip') {
+      attachListener('live_tracking/active_trip');
     }
   }
 
   return () => {
-    if (localChannel) {
-      localChannel.removeEventListener('message', handleLocalBroadcast);
-    }
-    if (unsubRTDB) unsubRTDB();
-    if (unsubActive) unsubActive();
-    if (unsubFirestore) unsubFirestore();
+    cleanups.forEach((fn) => {
+      try { fn(); } catch {}
+    });
   };
 }
 

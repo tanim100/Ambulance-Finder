@@ -4,7 +4,7 @@ import { useState, useEffect, useRef } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import dynamic from 'next/dynamic';
 import Link from 'next/link';
-import axios from 'axios';
+import { bookingAPI } from '@/lib/api';
 import io from 'socket.io-client';
 import { subscribeToAmbulanceLocation } from '@/lib/firebaseTracking';
 
@@ -13,19 +13,21 @@ const MapComponent = dynamic(() => import('@/components/map/MapComponent'), { ss
 
 const STATUS_STEPS = ['Pending', 'Accepted', 'En Route', 'Arrived', 'Completed'];
 
-const DEFAULT_BOOKING = {
-  id: 'active_trip',
-  status: 'En Route',
-  pickup_lat: 23.8103,
-  pickup_lng: 90.4125,
-  driver: {
-    name: 'Rahim Ahmed',
-    phone: '+880-1711-000111',
-    rating: 4.8,
-    vehicle_number: 'DHA-AMB-4421',
-  },
-  eta: '4 min',
-};
+// Helper to calculate distance in km
+function calculateDistance(lat1, lon1, lat2, lon2) {
+  if (!lat1 || !lon1 || !lat2 || !lon2) return null;
+  const R = 6371; // km
+  const dLat = ((lat2 - lat1) * Math.PI) / 180;
+  const dLon = ((lon2 - lon1) * Math.PI) / 180;
+  const a =
+    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+    Math.cos((lat1 * Math.PI) / 180) *
+      Math.cos((lat2 * Math.PI) / 180) *
+      Math.sin(dLon / 2) *
+      Math.sin(dLon / 2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  return R * c;
+}
 
 export default function TrackingPage() {
   const { id } = useParams();
@@ -33,6 +35,7 @@ export default function TrackingPage() {
 
   const [booking, setBooking] = useState(null);
   const [driverPos, setDriverPos] = useState(null);
+  const [patientPos, setPatientPos] = useState(null);
   const [loading, setLoading] = useState(true);
   const [cancelling, setCancelling] = useState(false);
   const [liveStreamStatus, setLiveStreamStatus] = useState({
@@ -43,25 +46,51 @@ export default function TrackingPage() {
   });
 
   const socketRef = useRef(null);
-  const intervalRef = useRef(null);
 
-  // ── Load booking ──
+  // ── Load booking & patient exact location ──
   useEffect(() => {
-    const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
+    // 1. Try to get user exact location from localStorage
+    let userExactLoc = { lat: 23.8103, lng: 90.4125 };
+    try {
+      const saved = localStorage.getItem('user_last_location');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (parsed?.lat && parsed?.lng) {
+          userExactLoc = { lat: parsed.lat, lng: parsed.lng };
+        }
+      }
+    } catch {}
 
     const loadBooking = async () => {
       try {
-        const { data } = await axios.get(
-          `${process.env.NEXT_PUBLIC_API_URL}/api/bookings/${id}`,
-          { headers: { Authorization: `Bearer ${token}` } }
-        );
-        const b = data?.data || data;
+        const res = await bookingAPI.getById(id);
+        const b = res.data?.booking || res.data?.data || res.data;
         setBooking(b);
-        setDriverPos({ lat: b.pickup_lat - 0.012, lng: b.pickup_lng + 0.008 });
+
+        const pLat = Number(b.pickupLat ?? b.pickup_lat ?? userExactLoc.lat);
+        const pLng = Number(b.pickupLng ?? b.pickup_lng ?? userExactLoc.lng);
+        setPatientPos({ lat: pLat, lng: pLng });
+
+        // Initial driver position near pickup
+        setDriverPos({ lat: pLat - 0.008, lng: pLng + 0.006 });
       } catch {
-        // Fall back to active trip data
-        setBooking({ ...DEFAULT_BOOKING, id: id || 'active_trip' });
-        setDriverPos({ lat: DEFAULT_BOOKING.pickup_lat - 0.012, lng: DEFAULT_BOOKING.pickup_lng + 0.008 });
+        // Fall back to active trip with user's exact detected location
+        const fallbackBooking = {
+          id: id || 'active_trip',
+          status: 'En Route',
+          pickupLat: userExactLoc.lat,
+          pickupLng: userExactLoc.lng,
+          pickupAddress: 'Patient Current Location',
+          driver: {
+            name: 'Assigned Driver',
+            phone: '+880 1700-111111',
+            rating: 4.9,
+            vehicle_number: 'DHA-AMB-4421',
+          },
+        };
+        setBooking(fallbackBooking);
+        setPatientPos(userExactLoc);
+        setDriverPos({ lat: userExactLoc.lat - 0.008, lng: userExactLoc.lng + 0.006 });
       } finally {
         setLoading(false);
       }
@@ -74,11 +103,9 @@ export default function TrackingPage() {
   useEffect(() => {
     if (!booking) return;
     const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
-    let hasLiveStream = false;
 
     const handleLocationUpdate = (liveData) => {
       if (liveData?.lat && liveData?.lng) {
-        hasLiveStream = true;
         setDriverPos({ lat: liveData.lat, lng: liveData.lng });
         setLiveStreamStatus({
           active: true,
@@ -93,13 +120,12 @@ export default function TrackingPage() {
       }
     };
 
-    // 1. Subscribe to Firebase Realtime stream for this trip & central active_trip
+    // 1. Subscribe to Firebase Realtime stream
     const unsubscribeFirebase = subscribeToAmbulanceLocation(id, handleLocationUpdate);
-    const unsubActive = subscribeToAmbulanceLocation('active_trip', handleLocationUpdate);
 
     // 2. Socket.io fallback
     try {
-      socketRef.current = io(process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000', {
+      socketRef.current = io(process.env.NEXT_PUBLIC_SOCKET_URL || 'http://localhost:5000', {
         auth: { token },
         transports: ['websocket'],
       });
@@ -113,29 +139,29 @@ export default function TrackingPage() {
       socketRef.current.on('booking_status_update', ({ status }) => {
         setBooking((prev) => ({ ...prev, status }));
       });
-    } catch {
-      // Socket not available
-    }
+    } catch {}
 
     return () => {
       unsubscribeFirebase();
-      unsubActive();
       socketRef.current?.disconnect();
-      clearInterval(intervalRef.current);
     };
   }, [booking, id]);
+
+  // Calculate live dynamic distance & ETA
+  const liveDistance = patientPos && driverPos
+    ? calculateDistance(patientPos.lat, patientPos.lng, driverPos.lat, driverPos.lng)
+    : null;
+
+  const liveETA = liveDistance
+    ? `${Math.max(1, Math.round((liveDistance / (liveStreamStatus.speed || 35)) * 60))} min`
+    : '3-5 min';
 
   // ── Cancel booking ──
   const handleCancel = async () => {
     if (!confirm('Cancel this ambulance request?')) return;
     setCancelling(true);
     try {
-      const token = localStorage.getItem('token');
-      await axios.patch(
-        `${process.env.NEXT_PUBLIC_API_URL}/api/bookings/${id}/cancel`,
-        {},
-        { headers: { Authorization: `Bearer ${token}` } }
-      );
+      await bookingAPI.cancel(id);
       router.push('/user/dashboard');
     } catch {
       alert('Could not cancel. Please try again.');
@@ -205,14 +231,19 @@ export default function TrackingPage() {
               <span className="relative inline-flex rounded-full h-3 w-3 bg-emerald-500"></span>
             </span>
             <span className="font-semibold text-emerald-600">
-              {liveStreamStatus.active ? `Live GPS Stream Connected (${liveStreamStatus.source})` : 'Listening for Driver Live Location…'}
+              {liveStreamStatus.active ? `Live Driver GPS Connected (${liveStreamStatus.source})` : 'Listening for Driver Live Location…'}
             </span>
           </div>
 
           <div className="flex items-center gap-4 text-gray-500">
             {driverPos && (
               <span>
-                Coordinates: <strong className="font-mono text-gray-800">{driverPos.lat.toFixed(4)}, {driverPos.lng.toFixed(4)}</strong>
+                Ambulance: <strong className="font-mono text-gray-800">{driverPos.lat.toFixed(4)}, {driverPos.lng.toFixed(4)}</strong>
+              </span>
+            )}
+            {liveDistance !== null && (
+              <span>
+                Distance: <strong className="text-gray-800">{liveDistance.toFixed(1)} km away</strong>
               </span>
             )}
             {liveStreamStatus.speed !== null && (
@@ -236,8 +267,8 @@ export default function TrackingPage() {
           }}
         >
           <MapComponent
-            pickupLat={booking?.pickup_lat ?? DEFAULT_BOOKING.pickup_lat}
-            pickupLng={booking?.pickup_lng ?? DEFAULT_BOOKING.pickup_lng}
+            pickupLat={patientPos?.lat}
+            pickupLng={patientPos?.lng}
             driverLat={driverPos?.lat}
             driverLng={driverPos?.lng}
           />
@@ -286,62 +317,58 @@ export default function TrackingPage() {
           {/* Driver Info */}
           <div className="glass-panel p-6">
             <h3 className="font-bold mb-5" style={{ fontSize: '1rem' }}>🧑‍✈️ Driver Info</h3>
-            {booking?.driver ? (
-              <div className="flex flex-col gap-3">
-                <div className="flex items-center gap-3">
-                  <div
-                    style={{
-                      width: '52px', height: '52px', borderRadius: '50%',
-                      background: 'var(--primary-light)', color: 'var(--primary)',
-                      display: 'flex', alignItems: 'center', justifyContent: 'center',
-                      fontSize: '1.4rem',
-                    }}
-                  >
-                    👤
-                  </div>
-                  <div>
-                    <div className="font-bold" style={{ fontSize: '1rem' }}>{booking.driver.name}</div>
-                    <div style={{ fontSize: '0.82rem', color: 'var(--on-surface-muted)' }}>
-                      ⭐ {booking.driver.rating} · {booking.driver.vehicle_number}
-                    </div>
-                  </div>
-                </div>
-
+            <div className="flex flex-col gap-3">
+              <div className="flex items-center gap-3">
                 <div
                   style={{
-                    padding: '10px 14px', borderRadius: '10px',
-                    background: 'var(--surface-2, var(--border-subtle, #f1f5f9))',
-                    fontSize: '0.88rem', color: 'var(--on-surface-muted)',
-                  }}
-                >
-                  📞 {booking.driver.phone}
-                </div>
-
-                {/* ETA */}
-                <div
-                  style={{
-                    padding: '12px 14px', borderRadius: '10px', textAlign: 'center',
+                    width: '52px', height: '52px', borderRadius: '50%',
                     background: 'var(--primary-light)', color: 'var(--primary)',
-                    fontWeight: 700, fontSize: '1.1rem',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    fontSize: '1.4rem',
                   }}
                 >
-                  ETA: {booking.eta || '~5 min'}
+                  👤
                 </div>
-
-                {/* Call button */}
-                <a
-                  href={`tel:${booking.driver.phone}`}
-                  className="btn-primary"
-                  style={{ textDecoration: 'none', justifyContent: 'center' }}
-                >
-                  📞 Call Driver
-                </a>
+                <div>
+                  <div className="font-bold" style={{ fontSize: '1rem' }}>
+                    {booking?.driver?.name || 'Assigned Driver'}
+                  </div>
+                  <div style={{ fontSize: '0.82rem', color: 'var(--on-surface-muted)' }}>
+                    ⭐ {booking?.driver?.rating || 4.9} · {booking?.driver?.vehicle_number || 'DHA-AMB-4421'}
+                  </div>
+                </div>
               </div>
-            ) : (
-              <p style={{ color: 'var(--on-surface-muted)', fontSize: '0.9rem' }}>
-                Waiting for a driver to accept…
-              </p>
-            )}
+
+              <div
+                style={{
+                  padding: '10px 14px', borderRadius: '10px',
+                  background: 'var(--surface-2, var(--border-subtle, #f1f5f9))',
+                  fontSize: '0.88rem', color: 'var(--on-surface-muted)',
+                }}
+              >
+                📞 {booking?.driver?.phone || '+880 1700-111111'}
+              </div>
+
+              {/* Dynamic ETA */}
+              <div
+                style={{
+                  padding: '12px 14px', borderRadius: '10px', textAlign: 'center',
+                  background: 'var(--primary-light)', color: 'var(--primary)',
+                  fontWeight: 700, fontSize: '1.1rem',
+                }}
+              >
+                Live ETA: {liveETA}
+              </div>
+
+              {/* Call button */}
+              <a
+                href={`tel:${booking?.driver?.phone || '+8801700111111'}`}
+                className="btn-primary"
+                style={{ textDecoration: 'none', justifyContent: 'center' }}
+              >
+                📞 Call Driver
+              </a>
+            </div>
           </div>
         </div>
 

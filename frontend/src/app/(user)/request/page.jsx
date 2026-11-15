@@ -1,9 +1,9 @@
 'use client';
 // src/app/(user)/request/page.jsx
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { MapPin, ArrowLeft, CheckCircle } from 'lucide-react';
+import { MapPin, ArrowLeft, CheckCircle, Navigation } from 'lucide-react';
 import Navbar from '@/components/layout/Navbar';
 import BottomNav from '@/components/layout/BottomNav';
 import Input from '@/components/ui/Input';
@@ -12,6 +12,8 @@ import Textarea from '@/components/ui/Textarea';
 import Button from '@/components/ui/Button';
 import AmbulanceTypeSelector from '@/components/ambulance/AmbulanceTypeSelector';
 import { bookingAPI } from '@/lib/api';
+import { useGeolocation } from '@/hooks/useGeolocation';
+import { updatePatientLocation } from '@/lib/firebaseTracking';
 
 const EMERGENCY_TYPES = [
   { value: 'accident',    label: '🚗 Accident' },
@@ -24,6 +26,8 @@ const EMERGENCY_TYPES = [
 
 export default function RequestPage() {
   const router = useRouter();
+  const { location: currentGeoLoc, getLocation, loading: geoLoading } = useGeolocation();
+
   const [form, setForm] = useState({
     patientName: '',
     emergencyType: '',
@@ -32,10 +36,25 @@ export default function RequestPage() {
     notes: '',
     ambulanceType: 'Basic',
   });
+
+  const [pickupCoords, setPickupCoords] = useState({ lat: 23.8103, lng: 90.4125 });
   const [errors, setErrors] = useState({});
   const [loading, setLoading] = useState(false);
   const [submitted, setSubmitted] = useState(false);
   const [bookingId, setBookingId] = useState(null);
+
+  // Auto-fill pickup location from detected geolocation if available
+  useEffect(() => {
+    if (currentGeoLoc && currentGeoLoc.lat && currentGeoLoc.lng) {
+      setPickupCoords({ lat: currentGeoLoc.lat, lng: currentGeoLoc.lng });
+      if (!form.pickupLocation) {
+        setForm((prev) => ({
+          ...prev,
+          pickupLocation: currentGeoLoc.label || `${currentGeoLoc.lat.toFixed(4)}, ${currentGeoLoc.lng.toFixed(4)}`,
+        }));
+      }
+    }
+  }, [currentGeoLoc]);
 
   const validate = () => {
     const e = {};
@@ -54,31 +73,84 @@ export default function RequestPage() {
   };
 
   const handleUseMyLocation = () => {
-    if (!navigator.geolocation) return;
-    navigator.geolocation.getCurrentPosition(
-      (pos) => {
-        setForm((p) => ({
-          ...p,
-          pickupLocation: `${pos.coords.latitude.toFixed(4)}, ${pos.coords.longitude.toFixed(4)}`,
-        }));
-      },
-      () => {}
-    );
+    if (navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition(
+        (pos) => {
+          const lat = pos.coords.latitude;
+          const lng = pos.coords.longitude;
+          setPickupCoords({ lat, lng });
+          setForm((p) => ({
+            ...p,
+            pickupLocation: `Current Location (${lat.toFixed(4)}, ${lng.toFixed(4)})`,
+          }));
+          try {
+            localStorage.setItem('user_last_location', JSON.stringify({ lat, lng, label: 'Your Exact GPS Location' }));
+          } catch {}
+        },
+        () => {
+          getLocation();
+        },
+        { enableHighAccuracy: true, timeout: 8000 }
+      );
+    } else {
+      getLocation();
+    }
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (!validate()) return;
     setLoading(true);
+
+    const payload = {
+      pickupLocation: {
+        address: form.pickupLocation,
+        lat: pickupCoords.lat,
+        lng: pickupCoords.lng,
+      },
+      destinationLocation: {
+        address: form.destination || 'Nearest General Hospital',
+      },
+      patientName: form.patientName,
+      emergencyType: form.emergencyType,
+      notes: form.notes,
+      ambulanceType: form.ambulanceType,
+    };
+
+    // Save exact pickup coordinates to localStorage
     try {
-      const res = await bookingAPI.create(form);
-      const id = res.data?.booking?._id || res.data?._id || 'demo-' + Date.now();
+      localStorage.setItem('user_last_location', JSON.stringify({
+        lat: pickupCoords.lat,
+        lng: pickupCoords.lng,
+        label: form.pickupLocation,
+      }));
+    } catch {}
+
+    try {
+      const res = await bookingAPI.create(payload);
+      const id = res.data?.booking?.id || res.data?.booking?._id || res.data?.id || res.data?._id || 'trip-' + Date.now();
       setBookingId(id);
+
+      // Publish patient location to Firebase
+      updatePatientLocation(id, {
+        lat: pickupCoords.lat,
+        lng: pickupCoords.lng,
+        address: form.pickupLocation,
+      });
+
       setSubmitted(true);
     } catch {
-      // Demo fallback
-      const id = 'demo-' + Date.now();
+      // Demo / offline fallback
+      const id = 'trip-' + Date.now();
       setBookingId(id);
+
+      // Publish to Firebase active trip
+      updatePatientLocation(id, {
+        lat: pickupCoords.lat,
+        lng: pickupCoords.lng,
+        address: form.pickupLocation,
+      });
+
       setSubmitted(true);
     } finally {
       setLoading(false);
@@ -97,18 +169,21 @@ export default function RequestPage() {
             </div>
             <h2 className="text-2xl font-bold text-gray-900 mb-2">Request Submitted!</h2>
             <p className="text-gray-500 mb-6 leading-relaxed">
-              Your ambulance request has been received. A driver will confirm shortly.
+              Your ambulance request has been received. A driver is dispatched and tracking is live.
             </p>
             <div className="bg-primary-50 border border-primary-200 rounded-2xl p-4 mb-6 text-left">
               <p className="text-xs text-gray-500 mb-1">Booking Reference</p>
               <p className="font-bold text-primary-700 text-sm break-all">{bookingId}</p>
+              <p className="text-[11px] text-gray-400 mt-1 font-mono">
+                Pickup: {pickupCoords.lat.toFixed(4)}, {pickupCoords.lng.toFixed(4)}
+              </p>
             </div>
             <div className="space-y-3">
               <Button
                 fullWidth
                 onClick={() => router.push(`/tracking/${bookingId}`)}
               >
-                🚑 Track Your Ambulance
+                🚑 Track Ambulance on Map
               </Button>
               <Button
                 variant="secondary"
@@ -133,8 +208,8 @@ export default function RequestPage() {
       <Navbar />
 
       {/* Header */}
-      <div className="bg-white border-b border-gray-200 px-4 py-4">
-        <div className="max-w-2xl mx-auto flex items-center gap-3">
+      <div className="bg-white border-b border-gray-100 px-4 py-4">
+        <div className="max-w-xl mx-auto flex items-center gap-3">
           <button
             onClick={() => router.back()}
             className="p-2 rounded-xl hover:bg-gray-100 transition-colors"
@@ -142,107 +217,106 @@ export default function RequestPage() {
             <ArrowLeft size={20} className="text-gray-600" />
           </button>
           <div>
-            <h1 className="font-bold text-gray-900 text-lg">Request Ambulance</h1>
-            <p className="text-xs text-gray-500">Fill in emergency details below</p>
+            <h1 className="text-xl font-bold text-gray-900">Request Ambulance</h1>
+            <p className="text-xs text-gray-500">Provide details for instant dispatch</p>
           </div>
         </div>
       </div>
 
-      <div className="flex-1 overflow-y-auto pb-24">
-        <form onSubmit={handleSubmit} className="max-w-2xl mx-auto px-4 py-6 space-y-6">
-          {/* Emergency banner */}
-          <div className="bg-primary-600 text-white rounded-2xl p-4 flex items-center gap-3">
-            <span className="text-3xl">🚨</span>
-            <div>
-              <p className="font-bold">Emergency Request</p>
-              <p className="text-xs text-primary-200">Fill all required fields accurately for faster response</p>
-            </div>
-          </div>
-
-          {/* Patient Info */}
-          <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5 space-y-4">
-            <h2 className="font-bold text-gray-900 flex items-center gap-2">
-              <span>👤</span> Patient Information
-            </h2>
+      {/* Form */}
+      <div className="flex-1 max-w-xl mx-auto w-full px-4 py-6">
+        <form onSubmit={handleSubmit} className="space-y-5">
+          {/* Patient info */}
+          <div className="bg-white rounded-2xl border border-gray-100 p-4 space-y-4">
+            <h2 className="font-bold text-gray-800 text-sm">Patient Details</h2>
             <Input
-              id="patientName"
-              name="patientName"
               label="Patient Name"
-              placeholder="Full name of the patient"
+              name="patientName"
+              placeholder="Full name of patient"
               value={form.patientName}
               onChange={handleChange}
               error={errors.patientName}
               required
             />
             <Select
-              id="emergencyType"
-              name="emergencyType"
               label="Emergency Type"
-              placeholder="Select emergency type"
-              options={EMERGENCY_TYPES}
+              name="emergencyType"
+              placeholder="Select emergency nature"
               value={form.emergencyType}
               onChange={handleChange}
+              options={EMERGENCY_TYPES}
               error={errors.emergencyType}
               required
             />
           </div>
 
-          {/* Location */}
-          <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5 space-y-4">
-            <h2 className="font-bold text-gray-900 flex items-center gap-2">
-              <span>📍</span> Location Details
-            </h2>
+          {/* Locations */}
+          <div className="bg-white rounded-2xl border border-gray-100 p-4 space-y-4">
+            <h2 className="font-bold text-gray-800 text-sm">Location Details</h2>
             <div>
-              <Input
-                id="pickupLocation"
-                name="pickupLocation"
-                label="Pickup Location"
-                placeholder="Enter pickup address"
-                value={form.pickupLocation}
-                onChange={handleChange}
-                error={errors.pickupLocation}
-                required
-                leftIcon={<MapPin size={16} />}
-              />
-              <button
-                type="button"
-                onClick={handleUseMyLocation}
-                className="mt-2 text-xs text-primary-600 font-medium hover:underline flex items-center gap-1"
-              >
-                📍 Use my current location
-              </button>
+              <div className="flex items-center justify-between mb-1.5">
+                <label className="text-sm font-semibold text-gray-700">
+                  Pickup Location <span className="text-red-500">*</span>
+                </label>
+                <button
+                  type="button"
+                  onClick={handleUseMyLocation}
+                  disabled={geoLoading}
+                  className="text-xs text-primary-600 hover:text-primary-700 font-medium flex items-center gap-1"
+                >
+                  <Navigation size={12} className={geoLoading ? 'animate-spin' : ''} />
+                  Detect Exact Location
+                </button>
+              </div>
+              <div className="relative">
+                <input
+                  type="text"
+                  name="pickupLocation"
+                  placeholder="House, road, landmark, city"
+                  value={form.pickupLocation}
+                  onChange={handleChange}
+                  className={`w-full px-4 py-3 rounded-xl border text-sm transition-all focus:outline-none focus:ring-2 focus:ring-primary-500/20 ${
+                    errors.pickupLocation ? 'border-red-500' : 'border-gray-200'
+                  }`}
+                />
+                <MapPin size={16} className="absolute right-3.5 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
+              </div>
+              {errors.pickupLocation && (
+                <p className="text-xs text-red-500 mt-1">{errors.pickupLocation}</p>
+              )}
+              <p className="text-[11px] text-gray-400 mt-1 font-mono">
+                Exact Coordinates: {pickupCoords.lat.toFixed(4)}, {pickupCoords.lng.toFixed(4)}
+              </p>
             </div>
+
             <Input
-              id="destination"
+              label="Destination Hospital / Address (Optional)"
               name="destination"
-              label="Destination Hospital (optional)"
-              placeholder="e.g. Dhaka Medical College"
+              placeholder="Hospital name or address"
               value={form.destination}
               onChange={handleChange}
-              leftIcon={<span className="text-sm">🏥</span>}
-            />
-            <Textarea
-              id="notes"
-              name="notes"
-              label="Additional Notes"
-              placeholder="Describe the emergency, patient condition, floor number, etc."
-              value={form.notes}
-              onChange={handleChange}
-              rows={3}
             />
           </div>
 
-          {/* Ambulance Type */}
-          <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
-            <h2 className="font-bold text-gray-900 mb-4 flex items-center gap-2">
-              <span>🚑</span> Select Ambulance Type
-            </h2>
-            {errors.ambulanceType && (
-              <p className="text-xs text-red-600 mb-3">{errors.ambulanceType}</p>
-            )}
+          {/* Ambulance selector */}
+          <div className="bg-white rounded-2xl border border-gray-100 p-4 space-y-3">
+            <h2 className="font-bold text-gray-800 text-sm">Ambulance Category</h2>
             <AmbulanceTypeSelector
               selected={form.ambulanceType}
-              onSelect={(type) => setForm((p) => ({ ...p, ambulanceType: type }))}
+              onChange={(val) => setForm((p) => ({ ...p, ambulanceType: val }))}
+              error={errors.ambulanceType}
+            />
+          </div>
+
+          {/* Additional notes */}
+          <div className="bg-white rounded-2xl border border-gray-100 p-4">
+            <Textarea
+              label="Medical Notes / Symptoms (Optional)"
+              name="notes"
+              placeholder="e.g. Difficulty breathing, conscious, stretcher needed..."
+              value={form.notes}
+              onChange={handleChange}
+              rows={3}
             />
           </div>
 
@@ -252,15 +326,10 @@ export default function RequestPage() {
             fullWidth
             size="xl"
             loading={loading}
-            className="shadow-xl shadow-primary-200"
+            className="shadow-xl shadow-primary-500/25"
           >
-            {loading ? 'Sending Request...' : '🚑 Request Ambulance Now'}
+            🚨 Request Ambulance Now
           </Button>
-
-          <p className="text-center text-xs text-gray-400 pb-2">
-            For immediate life-threatening emergencies, call{' '}
-            <a href="tel:999" className="text-primary-600 font-bold">999</a>
-          </p>
         </form>
       </div>
 

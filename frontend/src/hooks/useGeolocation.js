@@ -1,25 +1,26 @@
 'use client';
-// src/hooks/useGeolocation.js — Resilient Real-Time Geolocation with GPS, Real IP Geolocation & Map Picker
+// src/hooks/useGeolocation.js — Precision Geolocation with High-Accuracy GPS, WiFi Triangulation & IP Fallback
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 
-// Default central fallback if everything else fails
-const DEFAULT_LOCATION = {
-  lat: 23.8311,
-  lng: 90.4243,
-  accuracy: 100,
-  source: 'network',
-  label: 'Dhaka (Khilkhet), Bangladesh',
+// Default fallback location (Dhaka Central)
+const DEFAULT_FALLBACK = {
+  lat: 23.8103,
+  lng: 90.4125,
+  accuracy: 500,
+  source: 'default',
+  label: 'Dhaka Central, Bangladesh',
 };
 
 export function useGeolocation() {
-  const [location, setLocation] = useState(DEFAULT_LOCATION);
+  const [location, setLocation] = useState(DEFAULT_FALLBACK);
   const [error, setError] = useState(null);
   const [loading, setLoading] = useState(false);
   const [permissionState, setPermissionState] = useState('prompt');
+  const hasDetectedRef = useRef(false);
 
-  // Fetch real physical location via Free IP Geolocation API (HTTPS)
-  const fetchRealIPLocation = useCallback(async () => {
+  // 1. Fetch real physical location via IP (HTTPS)
+  const fetchIPLocation = useCallback(async () => {
     try {
       const res = await fetch('https://freeipapi.com/api/json');
       if (res.ok) {
@@ -34,81 +35,131 @@ export function useGeolocation() {
             city: data.cityName,
             ip: data.ipAddress,
           };
-          setLocation(detectedLoc);
+          // Only use IP if GPS has not already provided exact coordinates
+          if (!hasDetectedRef.current) {
+            setLocation(detectedLoc);
+            if (typeof window !== 'undefined') {
+              try {
+                localStorage.setItem('user_last_location', JSON.stringify(detectedLoc));
+              } catch {}
+            }
+          }
           return detectedLoc;
         }
       }
     } catch (e) {
       console.warn('IP geolocation notice:', e?.message || e);
     }
-    return DEFAULT_LOCATION;
+    return DEFAULT_FALLBACK;
   }, []);
 
+  // 2. High-precision browser geolocation with double-fallback strategy
   const getLocation = useCallback(() => {
     if (typeof window === 'undefined') return;
+
+    // Check if user previously saved a location
+    try {
+      const saved = localStorage.getItem('user_last_location');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (parsed?.lat && parsed?.lng) {
+          setLocation(parsed);
+        }
+      }
+    } catch {}
+
+    if (!navigator.geolocation) {
+      setError('Geolocation not supported by browser.');
+      fetchIPLocation();
+      return;
+    }
 
     setLoading(true);
     setError(null);
 
-    // Try hardware device GPS
-    if (navigator.geolocation) {
-      navigator.geolocation.getCurrentPosition(
-        (pos) => {
-          const gpsLoc = {
-            lat: pos.coords.latitude,
-            lng: pos.coords.longitude,
-            accuracy: pos.coords.accuracy,
-            speed: pos.coords.speed,
-            heading: pos.coords.heading,
-            source: 'hardware-gps',
-            label: 'Live Device GPS (High Accuracy)',
-          };
-          setLocation(gpsLoc);
-          setLoading(false);
-          setPermissionState('granted');
-        },
-        (err) => {
-          // If browser GPS is denied or unavailable on desktop PC, use real network IP location
-          fetchRealIPLocation().then(() => {
-            setLoading(false);
-          });
-          if (err.code === err.PERMISSION_DENIED) {
-            setPermissionState('denied');
-            setError('Browser GPS denied. Using real network location.');
-          } else {
-            setError('Using real network location.');
-          }
-        },
-        { enableHighAccuracy: true, timeout: 6000, maximumAge: 10000 }
-      );
-    } else {
-      fetchRealIPLocation().then(() => {
+    // Try Strategy A: High accuracy GPS
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        hasDetectedRef.current = true;
+        const gpsLoc = {
+          lat: pos.coords.latitude,
+          lng: pos.coords.longitude,
+          accuracy: pos.coords.accuracy,
+          speed: pos.coords.speed,
+          heading: pos.coords.heading,
+          source: 'device-gps',
+          label: 'Exact Live Device Location (GPS)',
+        };
+        setLocation(gpsLoc);
         setLoading(false);
-      });
-    }
-  }, [fetchRealIPLocation]);
+        setPermissionState('granted');
+        try {
+          localStorage.setItem('user_last_location', JSON.stringify(gpsLoc));
+        } catch {}
+      },
+      (err) => {
+        // Strategy B: Fallback to low-accuracy / WiFi triangulation (works fast on Windows/desktops)
+        navigator.geolocation.getCurrentPosition(
+          (pos) => {
+            hasDetectedRef.current = true;
+            const wifiLoc = {
+              lat: pos.coords.latitude,
+              lng: pos.coords.longitude,
+              accuracy: pos.coords.accuracy,
+              source: 'device-wifi',
+              label: 'Exact Device Location (WiFi / Network)',
+            };
+            setLocation(wifiLoc);
+            setLoading(false);
+            setPermissionState('granted');
+            try {
+              localStorage.setItem('user_last_location', JSON.stringify(wifiLoc));
+            } catch {}
+          },
+          () => {
+            // Strategy C: Fall back to IP-based location
+            fetchIPLocation().then(() => {
+              setLoading(false);
+            });
+            if (err.code === err.PERMISSION_DENIED) {
+              setPermissionState('denied');
+              setError('Location permission denied. Click map to pick exact location.');
+            } else {
+              setError('GPS unavailable on this device. Using network location.');
+            }
+          },
+          { enableHighAccuracy: false, timeout: 5000, maximumAge: 30000 }
+        );
+      },
+      { enableHighAccuracy: true, timeout: 6000, maximumAge: 10000 }
+    );
+  }, [fetchIPLocation]);
 
+  // 3. Continuous device GPS watcher
   const watchLocation = useCallback(() => {
     if (typeof window === 'undefined' || !navigator.geolocation) return null;
 
     try {
       const watchId = navigator.geolocation.watchPosition(
         (pos) => {
-          setLocation({
+          hasDetectedRef.current = true;
+          const liveLoc = {
             lat: pos.coords.latitude,
             lng: pos.coords.longitude,
             accuracy: pos.coords.accuracy,
             speed: pos.coords.speed,
             heading: pos.coords.heading,
-            source: 'hardware-gps',
-            label: 'Live Device GPS',
-          });
+            source: 'device-gps-live',
+            label: 'Exact Live GPS',
+          };
+          setLocation(liveLoc);
           setPermissionState('granted');
+          try {
+            localStorage.setItem('user_last_location', JSON.stringify(liveLoc));
+          } catch {}
         },
-        () => {
-          // Keep current real location
-        },
-        { enableHighAccuracy: true, timeout: 10000, maximumAge: 3000 }
+        () => {},
+        { enableHighAccuracy: false, timeout: 10000, maximumAge: 5000 }
       );
       return watchId;
     } catch {
@@ -122,23 +173,27 @@ export function useGeolocation() {
     }
   }, []);
 
-  const setManualLocation = useCallback((coords, label = 'Custom Pinned Location') => {
+  // 4. Manually set exact location (via map click or search)
+  const setManualLocation = useCallback((coords, label = 'Exact Pinned Location') => {
     if (coords && typeof coords.lat === 'number' && typeof coords.lng === 'number') {
-      setLocation({
+      const manualLoc = {
         lat: coords.lat,
         lng: coords.lng,
-        accuracy: 10,
+        accuracy: 5,
         source: 'manual-pin',
         label,
-      });
+      };
+      hasDetectedRef.current = true;
+      setLocation(manualLoc);
+      try {
+        localStorage.setItem('user_last_location', JSON.stringify(manualLoc));
+      } catch {}
     }
   }, []);
 
   useEffect(() => {
-    // Immediately attempt GPS + real IP detection on mount
-    fetchRealIPLocation();
     getLocation();
-  }, [fetchRealIPLocation, getLocation]);
+  }, [getLocation]);
 
   return {
     location,
