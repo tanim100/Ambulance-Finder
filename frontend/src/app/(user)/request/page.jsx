@@ -501,7 +501,14 @@ export default function RequestPage() {
             <h2 className="font-bold text-gray-800 text-sm">Ambulance Category</h2>
             <AmbulanceTypeSelector
               selected={form.ambulanceType}
-              onChange={(val) => setForm((p) => ({ ...p, ambulanceType: val }))}
+              onChange={(val) => {
+                setForm((p) => ({ ...p, ambulanceType: val }));
+                if (errors.ambulanceType) setErrors((p) => ({ ...p, ambulanceType: '' }));
+              }}
+              onSelect={(val) => {
+                setForm((p) => ({ ...p, ambulanceType: val }));
+                if (errors.ambulanceType) setErrors((p) => ({ ...p, ambulanceType: '' }));
+              }}
               error={errors.ambulanceType}
             />
           </div>

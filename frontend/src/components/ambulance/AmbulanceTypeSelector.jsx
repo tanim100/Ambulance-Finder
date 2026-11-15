@@ -39,44 +39,58 @@ const types = [
   },
 ];
 
-export default function AmbulanceTypeSelector({ selected, onSelect }) {
+export default function AmbulanceTypeSelector({ selected, onSelect, onChange, error }) {
+  const handleSelect = (typeId) => {
+    if (typeof onChange === 'function') {
+      onChange(typeId);
+    }
+    if (typeof onSelect === 'function') {
+      onSelect(typeId);
+    }
+  };
+
   return (
-    <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-      {types.map((type) => {
-        const isSelected = selected === type.id;
-        return (
-          <button
-            key={type.id}
-            type="button"
-            onClick={() => onSelect(type.id)}
-            className={[
-              'relative flex flex-col items-start p-4 rounded-2xl border-2 transition-all duration-200 text-left',
-              isSelected ? type.selectedColor : type.color,
-              'hover:shadow-md active:scale-98',
-            ].join(' ')}
-          >
-            {isSelected && (
-              <CheckCircle
-                size={18}
-                className={`absolute top-3 right-3 ${type.textColor}`}
-                fill="currentColor"
-              />
-            )}
-            <span className="text-3xl mb-2">{type.emoji}</span>
-            <p className={`font-bold text-base ${type.textColor}`}>{type.label}</p>
-            <p className="text-xs text-gray-500 mb-2">{type.desc}</p>
-            <p className={`font-bold text-sm ${type.textColor}`}>{type.price}</p>
-            <ul className="mt-2 space-y-1">
-              {type.features.map((f) => (
-                <li key={f} className="text-xs text-gray-600 flex items-center gap-1">
-                  <span className="w-1 h-1 rounded-full bg-gray-400" />
-                  {f}
-                </li>
-              ))}
-            </ul>
-          </button>
-        );
-      })}
+    <div className="space-y-2">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+        {types.map((type) => {
+          const isSelected = selected === type.id;
+          return (
+            <button
+              key={type.id}
+              type="button"
+              onClick={() => handleSelect(type.id)}
+              className={[
+                'relative flex flex-col items-start p-4 rounded-2xl border-2 transition-all duration-200 text-left cursor-pointer',
+                isSelected ? type.selectedColor : type.color,
+                'hover:shadow-md active:scale-98',
+              ].join(' ')}
+            >
+              {isSelected && (
+                <CheckCircle
+                  size={18}
+                  className={`absolute top-3 right-3 ${type.textColor}`}
+                  fill="currentColor"
+                />
+              )}
+              <span className="text-3xl mb-2">{type.emoji}</span>
+              <p className={`font-bold text-base ${type.textColor}`}>{type.label}</p>
+              <p className="text-xs text-gray-500 mb-2">{type.desc}</p>
+              <p className={`font-bold text-sm ${type.textColor}`}>{type.price}</p>
+              <ul className="mt-2 space-y-1">
+                {type.features.map((f) => (
+                  <li key={f} className="text-xs text-gray-600 flex items-center gap-1">
+                    <span className="w-1 h-1 rounded-full bg-gray-400" />
+                    {f}
+                  </li>
+                ))}
+              </ul>
+            </button>
+          );
+        })}
+      </div>
+      {error && (
+        <p className="text-xs text-red-500 font-medium mt-1">⚠ {error}</p>
+      )}
     </div>
   );
 }
