@@ -101,7 +101,7 @@ const FAQS = [
   },
   {
     q: 'Can I call if I do not have an internet connection or smartphone?',
-    a: 'Yes. Our direct 24/7 National Emergency Hotline is connected with 999 and our central control room at 16263 and 01900-HELP99 for instant manual dispatch.',
+    a: 'Yes. Our direct 24/7 National Emergency Hotline is connected with 999 and our central control room at 16263 and 01737300988 for instant manual dispatch.',
   },
 ];
 
@@ -497,7 +497,7 @@ export default function LandingPage() {
             {[
               { title: 'National Emergency', num: '999', sub: 'Police, Medical & Fire Rescue', col: 'bg-rose-600' },
               { title: 'Govt. Health Line', num: '16263', sub: '24/7 Emergency Medical Advice', col: 'bg-blue-600' },
-              { title: 'AmbulanceFinder Control', num: '01900-HELP99', sub: 'Priority Manual Dispatch Room', col: 'bg-emerald-600' },
+              { title: 'AmbulanceFinder Control', num: '01737300988', sub: 'Priority Manual Dispatch Room', col: 'bg-emerald-600' },
             ].map((c) => (
               <a
                 key={c.num}
