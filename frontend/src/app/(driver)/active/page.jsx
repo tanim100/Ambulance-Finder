@@ -4,7 +4,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import dynamic from 'next/dynamic';
-import { Phone, MapPin, ChevronLeft, Radio, Play, Pause, RefreshCw, Send, CheckCircle2, Navigation, Edit3 } from 'lucide-react';
+import { Phone, MapPin, ChevronLeft, ChevronUp, ChevronDown, Radio, Play, Pause, RefreshCw, Send, CheckCircle2, Navigation, Maximize2, Minimize2 } from 'lucide-react';
 import Navbar from '@/components/layout/Navbar';
 import Badge from '@/components/ui/Badge';
 import Button from '@/components/ui/Button';
@@ -60,6 +60,8 @@ export default function DriverActivePage() {
   });
 
   const [isSimulating, setIsSimulating] = useState(false);
+  const [shutterState, setShutterState] = useState('half'); // 'collapsed' | 'half' | 'expanded'
+  const touchStartY = useRef(0);
   const [firebaseStatus, setFirebaseStatus] = useState({
     connected: false,
     lastSyncTime: null,
@@ -275,26 +277,58 @@ export default function DriverActivePage() {
   }
 
   return (
-    <div className="flex flex-col h-screen bg-gray-50">
+    <div className="flex flex-col h-screen bg-gray-50 overflow-hidden relative">
       <Navbar />
 
-      <div className="bg-white border-b border-gray-100 px-4 py-3 flex items-center gap-3">
-        <button onClick={() => router.push('/dashboard')} className="p-1.5 rounded-lg hover:bg-gray-100">
-          <ChevronLeft size={20} className="text-gray-600" />
-        </button>
-        <div className="flex-1">
-          <h1 className="font-bold text-gray-900">Active Ambulance GPS Stream</h1>
-          <div className="flex items-center gap-1.5 mt-0.5">
-            <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-            <span className="text-xs text-emerald-600 font-medium">{trip.status}</span>
+      {/* Header with Driver Quick Controls and Shutter Toggle */}
+      <div className="bg-white border-b border-gray-100 px-4 py-2.5 flex items-center justify-between gap-3 z-10 shrink-0">
+        <div className="flex items-center gap-2.5">
+          <button onClick={() => router.push('/dashboard')} className="p-1.5 rounded-lg hover:bg-gray-100 transition-colors">
+            <ChevronLeft size={20} className="text-gray-600" />
+          </button>
+          <div>
+            <h1 className="font-bold text-gray-900 text-sm sm:text-base leading-tight">Driver Active Navigation</h1>
+            <div className="flex items-center gap-1.5 mt-0.5">
+              <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+              <span className="text-xs text-emerald-600 font-semibold">{trip.status}</span>
+              <span className="text-gray-300">•</span>
+              <span className="text-xs font-mono text-gray-500 font-semibold">{activeLoc.speed} km/h</span>
+            </div>
           </div>
         </div>
-        <Badge status={trip.emergencyType.toLowerCase()} label={trip.emergencyType} />
+
+        <div className="flex items-center gap-2">
+          {/* Quick Shutter Toggle Button */}
+          <button
+            type="button"
+            onClick={() => setShutterState((prev) => (prev === 'collapsed' ? 'half' : 'collapsed'))}
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition-all shadow-sm border ${
+              shutterState === 'collapsed'
+                ? 'bg-emerald-50 text-emerald-700 border-emerald-300 hover:bg-emerald-100'
+                : 'bg-rose-50 text-rose-700 border-rose-200 hover:bg-rose-100'
+            }`}
+            title="শাটার টগল করুন"
+          >
+            {shutterState === 'collapsed' ? (
+              <>
+                <ChevronUp size={15} />
+                <span>শাটার তুলুন</span>
+              </>
+            ) : (
+              <>
+                <ChevronDown size={15} />
+                <span>শাটার নামান (ম্যাপ বড়)</span>
+              </>
+            )}
+          </button>
+          <Badge status={trip.emergencyType.toLowerCase()} label={trip.emergencyType} />
+        </div>
       </div>
 
-      <div className="flex-1 overflow-y-auto">
-        {/* Map */}
-        <div className="h-64 mx-4 mt-4 rounded-2xl overflow-hidden shadow-sm border border-gray-200">
+      {/* Main Screen Container: Full Map Area */}
+      <div className="flex-1 relative w-full h-full min-h-0 overflow-hidden">
+        {/* Full-view Leaflet Map */}
+        <div className="absolute inset-0 z-0">
           <MapView
             center={activeLoc ? [activeLoc.lat, activeLoc.lng] : [23.8103, 90.4125]}
             userLocation={trip.userLocation}
@@ -308,170 +342,293 @@ export default function DriverActivePage() {
           />
         </div>
 
-        <div className="px-4 py-4 pb-8 space-y-4">
-          {/* Live Firebase Broadcast Console */}
-          <div className="rounded-2xl p-4 bg-white border-2 border-emerald-500/40 shadow-sm">
-            <div className="flex items-center justify-between mb-2">
-              <div className="flex items-center gap-2">
-                <span className="relative flex h-3 w-3">
-                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-                  <span className="relative inline-flex rounded-full h-3 w-3 bg-emerald-500"></span>
+        {/* Floating Quick Action Overlay on Map (Top Right) */}
+        <div className="absolute top-3 right-3 z-10 flex flex-col items-end gap-2 pointer-events-auto">
+          {/* Shutter Toggle Floating Pill */}
+          <button
+            type="button"
+            onClick={() => setShutterState((prev) => (prev === 'collapsed' ? 'half' : 'collapsed'))}
+            className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold bg-white/95 backdrop-blur-md text-gray-800 shadow-xl border border-gray-200 hover:bg-white active:scale-95 transition-all"
+          >
+            {shutterState === 'collapsed' ? (
+              <>
+                <ChevronUp size={15} className="text-emerald-600" />
+                <span>📋 কার্ড খুলুন</span>
+              </>
+            ) : (
+              <>
+                <Maximize2 size={14} className="text-blue-600" />
+                <span>🗺️ ফুল ম্যাপ (শাটার নামান)</span>
+              </>
+            )}
+          </button>
+
+          {/* Quick Hardware GPS Detect */}
+          <button
+            type="button"
+            onClick={handleGetRealDeviceGPS}
+            disabled={geoLoading}
+            className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold bg-white/95 backdrop-blur-md text-emerald-700 shadow-lg border border-emerald-200 hover:bg-emerald-50 active:scale-95 transition-all"
+            title="Detect Exact GPS"
+          >
+            <Navigation size={13} className={geoLoading ? 'animate-spin' : ''} />
+            <span>GPS Locate</span>
+          </button>
+        </div>
+
+        {/* ── Collapsible & Draggable Bottom Sheet / Shutter (শাটার) ── */}
+        <div
+          className={`absolute bottom-0 left-0 right-0 z-20 bg-white rounded-t-3xl shadow-[0_-12px_40px_rgba(0,0,0,0.22)] border-t border-gray-200 flex flex-col transition-all duration-300 ease-out ${
+            shutterState === 'collapsed'
+              ? 'h-24 sm:h-20'
+              : shutterState === 'expanded'
+              ? 'h-[85%]'
+              : 'h-[50%]'
+          }`}
+        >
+          {/* Shutter Grab Handle & Quick Row */}
+          <div
+            className="w-full pt-2.5 pb-2 px-4 cursor-pointer select-none shrink-0 flex flex-col border-b border-gray-100 bg-white hover:bg-gray-50/70 rounded-t-3xl transition-colors"
+            onClick={() => {
+              setShutterState((prev) => {
+                if (prev === 'collapsed') return 'half';
+                if (prev === 'half') return 'expanded';
+                return 'collapsed';
+              });
+            }}
+            onTouchStart={(e) => {
+              touchStartY.current = e.touches[0].clientY;
+            }}
+            onTouchEnd={(e) => {
+              const diff = e.changedTouches[0].clientY - touchStartY.current;
+              if (diff > 35) {
+                // Dragged down -> lower/collapse shutter
+                setShutterState((prev) => (prev === 'expanded' ? 'half' : 'collapsed'));
+              } else if (diff < -35) {
+                // Dragged up -> raise/expand shutter
+                setShutterState((prev) => (prev === 'collapsed' ? 'half' : 'expanded'));
+              }
+            }}
+          >
+            {/* Grab Pill */}
+            <div className="w-12 h-1.5 rounded-full bg-gray-300 mx-auto mb-2" />
+
+            {/* Top Bar Summary Row */}
+            <div className="w-full flex items-center justify-between gap-2">
+              <div className="flex items-center gap-2 truncate flex-1 min-w-0">
+                <span className="font-bold text-gray-900 text-sm truncate">
+                  {trip.patientName}
                 </span>
-                <span className="text-xs font-bold text-emerald-800 tracking-wide uppercase">
-                  Firebase Realtime GPS: {firebaseStatus.connected ? 'Streaming Live' : 'Connecting'}
+                <span className="hidden xs:inline-block px-2 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200 shrink-0">
+                  {trip.status}
+                </span>
+                <span className="text-gray-400 text-xs truncate hidden sm:inline">
+                  • {trip.pickupLocation}
                 </span>
               </div>
-              <span className="text-[11px] font-mono text-gray-500">
-                {firebaseStatus.lastSyncTime ? `Uploaded: ${firebaseStatus.lastSyncTime}` : 'Connecting...'}
-              </span>
-            </div>
 
-            <div className="flex items-center justify-between text-[11px] text-gray-600 mb-2">
-              <span>Firebase Path: <strong className="font-mono text-emerald-700">live_tracking/active_trip</strong></span>
-              <span className="text-[10px] bg-emerald-50 text-emerald-700 font-semibold px-2 py-0.5 rounded-full border border-emerald-200">
-                {activeLoc.source || 'Real Location'}
-              </span>
-            </div>
+              {/* Shutter Action & Toggle Controls */}
+              <div className="flex items-center gap-2 shrink-0" onClick={(e) => e.stopPropagation()}>
+                {/* Collapsed mode quick call button */}
+                <a
+                  href={`tel:${trip.userPhone}`}
+                  className="w-8 h-8 rounded-full bg-green-500 hover:bg-green-600 text-white flex items-center justify-center transition-colors shadow-sm"
+                  title="Call Patient"
+                >
+                  <Phone size={14} />
+                </a>
 
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs font-mono bg-emerald-50/50 p-2.5 rounded-xl border border-emerald-100">
-              <div>
-                <span className="text-gray-400 block text-[10px]">LATITUDE</span>
-                <span className="font-bold text-emerald-900">{activeLoc.lat.toFixed(5)}</span>
-              </div>
-              <div>
-                <span className="text-gray-400 block text-[10px]">LONGITUDE</span>
-                <span className="font-bold text-emerald-900">{activeLoc.lng.toFixed(5)}</span>
-              </div>
-              <div>
-                <span className="text-gray-400 block text-[10px]">SPEED</span>
-                <span className="font-bold text-emerald-900">{activeLoc.speed} km/h</span>
-              </div>
-              <div>
-                <span className="text-gray-400 block text-[10px]">STATUS</span>
-                <span className="font-bold text-emerald-700">{trip.status}</span>
-              </div>
-            </div>
+                {/* Collapsed mode quick update status */}
+                {shutterState === 'collapsed' && currentIdx < TRIP_STATUSES.length - 1 && (
+                  <button
+                    type="button"
+                    onClick={handleNextStatus}
+                    disabled={updating}
+                    className="px-3 py-1.5 rounded-xl text-xs font-bold bg-primary-600 hover:bg-primary-700 text-white shadow-sm flex items-center gap-1 transition-all"
+                  >
+                    <span>{trip.status === 'Accepted' ? 'En Route' : trip.status === 'En Route' ? 'Arrived' : 'Complete'}</span>
+                  </button>
+                )}
 
-            {/* GPS Controls: Real Device vs Demo */}
-            <div className="mt-3 flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-gray-100">
-              <div className="flex items-center gap-2">
+                {/* Multi-state Shutter Button */}
                 <button
                   type="button"
-                  onClick={handleGetRealDeviceGPS}
-                  disabled={geoLoading}
-                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-emerald-600 text-white hover:bg-emerald-700 shadow-sm"
+                  onClick={() => setShutterState((prev) => (prev === 'collapsed' ? 'half' : 'collapsed'))}
+                  className="p-1.5 rounded-xl bg-gray-100 hover:bg-gray-200 text-gray-700 transition-colors"
+                  title={shutterState === 'collapsed' ? 'শাটার তুলুন' : 'শাটার নামান'}
                 >
-                  <Navigation size={13} className={geoLoading ? 'animate-spin' : ''} />
-                  📍 Detect My Exact GPS
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => setIsSimulating(!isSimulating)}
-                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
-                    isSimulating
-                      ? 'bg-amber-100 text-amber-800 border border-amber-300'
-                      : 'bg-gray-100 text-gray-700 hover:bg-gray-200 border border-gray-200'
-                  }`}
-                >
-                  {isSimulating ? (
-                    <>
-                      <Pause size={12} /> Pause Test Drive
-                    </>
-                  ) : (
-                    <>
-                      <Play size={12} /> Test Drive Simulation
-                    </>
-                  )}
+                  {shutterState === 'collapsed' ? <ChevronUp size={18} /> : <ChevronDown size={18} />}
                 </button>
               </div>
-
-              <button
-                type="button"
-                onClick={() => broadcastLocation(activeLoc, trip.status)}
-                className="flex items-center gap-1 text-[11px] text-gray-500 hover:text-gray-800"
-              >
-                <Send size={11} /> Push Now
-              </button>
             </div>
-            <p className="text-[10px] text-gray-400 mt-2">
-              Tip: You can also click anywhere directly on the map above to move the ambulance pin!
-            </p>
           </div>
 
-          {/* Status progress */}
-          <Card>
-            <div className="flex items-center justify-between mb-1">
-              {TRIP_STATUSES.map((status, idx) => (
-                <div key={status} className="flex items-center">
-                  <div className={[
-                    'w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold',
-                    idx < currentIdx ? 'bg-green-500 text-white' :
-                    idx === currentIdx ? 'bg-primary-600 text-white ring-4 ring-primary-100' :
-                    'bg-gray-100 text-gray-400',
-                  ].join(' ')}>
-                    {idx < currentIdx ? '✓' : idx + 1}
-                  </div>
-                  {idx < TRIP_STATUSES.length - 1 && (
-                    <div className={`h-0.5 w-8 sm:w-12 ${idx < currentIdx ? 'bg-green-400' : 'bg-gray-200'}`} />
-                  )}
+          {/* Shutter Scrollable Content (visible when half or expanded) */}
+          <div className="flex-1 overflow-y-auto px-4 py-3 space-y-3 pb-8">
+            {/* Live Firebase Broadcast Console */}
+            <div className="rounded-2xl p-3.5 bg-white border-2 border-emerald-500/40 shadow-sm">
+              <div className="flex items-center justify-between mb-2">
+                <div className="flex items-center gap-2">
+                  <span className="relative flex h-3 w-3">
+                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                    <span className="relative inline-flex rounded-full h-3 w-3 bg-emerald-500"></span>
+                  </span>
+                  <span className="text-xs font-bold text-emerald-800 tracking-wide uppercase">
+                    Firebase Realtime GPS: {firebaseStatus.connected ? 'Streaming Live' : 'Connecting'}
+                  </span>
                 </div>
-              ))}
-            </div>
-            <div className="flex justify-between">
-              {TRIP_STATUSES.map((s) => (
-                <p key={s} className="text-xs text-gray-400 text-center">{s}</p>
-              ))}
-            </div>
-          </Card>
-
-          {/* Patient card */}
-          <Card>
-            <div className="flex items-start justify-between mb-4">
-              <div>
-                <p className="text-xs text-gray-500 mb-1">Patient</p>
-                <p className="font-bold text-gray-900 text-lg">{trip.patientName}</p>
+                <span className="text-[11px] font-mono text-gray-500">
+                  {firebaseStatus.lastSyncTime ? `Uploaded: ${firebaseStatus.lastSyncTime}` : 'Connecting...'}
+                </span>
               </div>
-              <a
-                href={`tel:${trip.userPhone}`}
-                className="w-11 h-11 bg-green-500 rounded-xl flex items-center justify-center text-white hover:bg-green-600 transition-colors"
-              >
-                <Phone size={20} />
-              </a>
-            </div>
 
-            <div className="space-y-2 text-sm text-gray-600 bg-gray-50 rounded-xl p-3">
-              <div className="flex items-start gap-2">
-                <MapPin size={14} className="text-primary-500 mt-0.5 flex-shrink-0" />
+              <div className="flex items-center justify-between text-[11px] text-gray-600 mb-2">
+                <span>Firebase Path: <strong className="font-mono text-emerald-700">live_tracking/active_trip</strong></span>
+                <span className="text-[10px] bg-emerald-50 text-emerald-700 font-semibold px-2 py-0.5 rounded-full border border-emerald-200">
+                  {activeLoc.source || 'Real Location'}
+                </span>
+              </div>
+
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs font-mono bg-emerald-50/50 p-2.5 rounded-xl border border-emerald-100">
                 <div>
-                  <p className="text-xs text-gray-400">Pickup</p>
-                  <p>{trip.pickupLocation}</p>
+                  <span className="text-gray-400 block text-[10px]">LATITUDE</span>
+                  <span className="font-bold text-emerald-900">{activeLoc.lat.toFixed(5)}</span>
+                </div>
+                <div>
+                  <span className="text-gray-400 block text-[10px]">LONGITUDE</span>
+                  <span className="font-bold text-emerald-900">{activeLoc.lng.toFixed(5)}</span>
+                </div>
+                <div>
+                  <span className="text-gray-400 block text-[10px]">SPEED</span>
+                  <span className="font-bold text-emerald-900">{activeLoc.speed} km/h</span>
+                </div>
+                <div>
+                  <span className="text-gray-400 block text-[10px]">STATUS</span>
+                  <span className="font-bold text-emerald-700">{trip.status}</span>
                 </div>
               </div>
-              {trip.destination && (
+
+              {/* GPS Controls: Real Device vs Demo */}
+              <div className="mt-3 flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-gray-100">
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={handleGetRealDeviceGPS}
+                    disabled={geoLoading}
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-emerald-600 text-white hover:bg-emerald-700 shadow-sm"
+                  >
+                    <Navigation size={13} className={geoLoading ? 'animate-spin' : ''} />
+                    📍 Detect My Exact GPS
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setIsSimulating(!isSimulating)}
+                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
+                      isSimulating
+                        ? 'bg-amber-100 text-amber-800 border border-amber-300'
+                        : 'bg-gray-100 text-gray-700 hover:bg-gray-200 border border-gray-200'
+                    }`}
+                  >
+                    {isSimulating ? (
+                      <>
+                        <Pause size={12} /> Pause Test Drive
+                      </>
+                    ) : (
+                      <>
+                        <Play size={12} /> Test Drive Simulation
+                      </>
+                    )}
+                  </button>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => broadcastLocation(activeLoc, trip.status)}
+                  className="flex items-center gap-1 text-[11px] text-gray-500 hover:text-gray-800"
+                >
+                  <Send size={11} /> Push Now
+                </button>
+              </div>
+              <p className="text-[10px] text-gray-400 mt-2">
+                Tip: You can also click anywhere directly on the map above to move the ambulance pin!
+              </p>
+            </div>
+
+            {/* Status progress */}
+            <Card>
+              <div className="flex items-center justify-between mb-1">
+                {TRIP_STATUSES.map((status, idx) => (
+                  <div key={status} className="flex items-center">
+                    <div className={[
+                      'w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold',
+                      idx < currentIdx ? 'bg-green-500 text-white' :
+                      idx === currentIdx ? 'bg-primary-600 text-white ring-4 ring-primary-100' :
+                      'bg-gray-100 text-gray-400',
+                    ].join(' ')}>
+                      {idx < currentIdx ? '✓' : idx + 1}
+                    </div>
+                    {idx < TRIP_STATUSES.length - 1 && (
+                      <div className={`h-0.5 w-8 sm:w-12 ${idx < currentIdx ? 'bg-green-400' : 'bg-gray-200'}`} />
+                    )}
+                  </div>
+                ))}
+              </div>
+              <div className="flex justify-between">
+                {TRIP_STATUSES.map((s) => (
+                  <p key={s} className="text-xs text-gray-400 text-center">{s}</p>
+                ))}
+              </div>
+            </Card>
+
+            {/* Patient card */}
+            <Card>
+              <div className="flex items-start justify-between mb-4">
+                <div>
+                  <p className="text-xs text-gray-500 mb-1">Patient</p>
+                  <p className="font-bold text-gray-900 text-lg">{trip.patientName}</p>
+                </div>
+                <a
+                  href={`tel:${trip.userPhone}`}
+                  className="w-11 h-11 bg-green-500 rounded-xl flex items-center justify-center text-white hover:bg-green-600 transition-colors"
+                >
+                  <Phone size={20} />
+                </a>
+              </div>
+
+              <div className="space-y-2 text-sm text-gray-600 bg-gray-50 rounded-xl p-3">
                 <div className="flex items-start gap-2">
-                  <span className="text-sm mt-0.5 flex-shrink-0">🏥</span>
+                  <MapPin size={14} className="text-primary-500 mt-0.5 flex-shrink-0" />
                   <div>
-                    <p className="text-xs text-gray-400">Destination</p>
-                    <p>{trip.destination}</p>
+                    <p className="text-xs text-gray-400">Pickup</p>
+                    <p>{trip.pickupLocation}</p>
                   </div>
                 </div>
-              )}
-            </div>
-          </Card>
+                {trip.destination && (
+                  <div className="flex items-start gap-2">
+                    <span className="text-sm mt-0.5 flex-shrink-0">🏥</span>
+                    <div>
+                      <p className="text-xs text-gray-400">Destination</p>
+                      <p>{trip.destination}</p>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </Card>
 
-          {/* Action button */}
-          {currentIdx < TRIP_STATUSES.length - 1 && (
-            <Button
-              fullWidth
-              size="xl"
-              loading={updating}
-              onClick={handleNextStatus}
-              className="shadow-lg shadow-primary-200"
-            >
-              {getActionLabel()}
-            </Button>
-          )}
+            {/* Action button */}
+            {currentIdx < TRIP_STATUSES.length - 1 && (
+              <Button
+                fullWidth
+                size="xl"
+                loading={updating}
+                onClick={handleNextStatus}
+                className="shadow-lg shadow-primary-200"
+              >
+                {getActionLabel()}
+              </Button>
+            )}
+          </div>
         </div>
       </div>
     </div>
