@@ -267,7 +267,7 @@ export default function DriverActivePage() {
         <div className="text-6xl mb-4">🎉</div>
         <h2 className="text-2xl font-bold text-gray-900 mb-2">Trip Completed!</h2>
         <p className="text-gray-500 mb-8">Patient has been transported safely.</p>
-        <Button fullWidth onClick={() => router.push('/driver/dashboard')}>
+        <Button fullWidth onClick={() => router.push('/dashboard')}>
           Back to Dashboard
         </Button>
       </div>
@@ -279,7 +279,7 @@ export default function DriverActivePage() {
       <Navbar />
 
       <div className="bg-white border-b border-gray-100 px-4 py-3 flex items-center gap-3">
-        <button onClick={() => router.push('/driver/dashboard')} className="p-1.5 rounded-lg hover:bg-gray-100">
+        <button onClick={() => router.push('/dashboard')} className="p-1.5 rounded-lg hover:bg-gray-100">
           <ChevronLeft size={20} className="text-gray-600" />
         </button>
         <div className="flex-1">

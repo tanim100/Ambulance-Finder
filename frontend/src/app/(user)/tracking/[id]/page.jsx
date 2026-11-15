@@ -162,7 +162,7 @@ export default function TrackingPage() {
     setCancelling(true);
     try {
       await bookingAPI.cancel(id);
-      router.push('/user/dashboard');
+      router.push('/home');
     } catch {
       alert('Could not cancel. Please try again.');
       setCancelling(false);
@@ -205,7 +205,7 @@ export default function TrackingPage() {
           display: 'flex', alignItems: 'center', justifyContent: 'space-between',
         }}
       >
-        <Link href="/user/dashboard" style={{ textDecoration: 'none', color: 'var(--on-surface-muted)', fontSize: '0.9rem' }}>
+        <Link href="/home" style={{ textDecoration: 'none', color: 'var(--on-surface-muted)', fontSize: '0.9rem' }}>
           ← Back to Dashboard
         </Link>
         <span style={{ fontWeight: 700, fontSize: '1rem' }}>🚑 Live Ambulance Tracking</span>
