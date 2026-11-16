@@ -34,7 +34,7 @@ const AMBULANCE_FLEET = [
     name: 'Basic Life Support (BLS)',
     category: 'Non-Critical & Minor Trauma',
     eta: '3 - 5 Mins',
-    baseFare: '৳800',
+    baseFare: '৳850',
     color: 'from-blue-500 to-cyan-500',
     tagColor: 'bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-950/40 dark:text-blue-300 dark:border-blue-800',
     description: 'Specialized for stable patients, non-emergency transfers, post-surgery discharges, and orthopedic limb immobilization.',
