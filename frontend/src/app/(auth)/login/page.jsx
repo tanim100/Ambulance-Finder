@@ -5,6 +5,7 @@ import { useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import ThemeToggle from '@/components/ui/ThemeToggle';
+import GoogleAuthButton from '@/components/auth/GoogleAuthButton';
 import { authAPI } from '@/lib/api';
 import { setToken, setUser } from '@/lib/auth';
 
@@ -370,6 +371,11 @@ export default function LoginPage() {
               )}
             </button>
           </form>
+
+          {/* Google Sign In */}
+          <div style={{ marginTop: '14px' }}>
+            <GoogleAuthButton mode="signin" onError={(msg) => setApiError(msg)} />
+          </div>
 
           {/* Divider */}
           <div style={{ display: 'flex', alignItems: 'center', gap: '12px', margin: '24px 0' }}>

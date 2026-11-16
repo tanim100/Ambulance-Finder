@@ -18,6 +18,7 @@ import {
   Sparkles,
 } from 'lucide-react';
 import ThemeToggle from '@/components/ui/ThemeToggle';
+import GoogleAuthButton from '@/components/auth/GoogleAuthButton';
 import { authAPI } from '@/lib/api';
 import { setToken, setUser } from '@/lib/auth';
 
@@ -307,6 +308,20 @@ export default function RegisterPage() {
               <ArrowRight size={17} />
             </button>
           </form>
+
+          {/* Divider */}
+          <div className="flex items-center gap-3 my-1">
+            <div className="flex-1 h-px bg-slate-200 dark:bg-slate-800" />
+            <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">
+              Or sign up with
+            </span>
+            <div className="flex-1 h-px bg-slate-200 dark:bg-slate-800" />
+          </div>
+
+          {/* Google Sign Up */}
+          <div>
+            <GoogleAuthButton mode="signup" onError={(msg) => setApiError(msg)} />
+          </div>
 
           {/* Switch to login */}
           <div className="pt-2 text-center text-xs sm:text-sm text-slate-500 dark:text-slate-400 border-t border-slate-100 dark:border-slate-800">

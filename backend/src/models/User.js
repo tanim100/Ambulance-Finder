@@ -52,6 +52,15 @@ const User = sequelize.define(
       type: DataTypes.TEXT,
       allowNull: true,
     },
+    googleId: {
+      type: DataTypes.STRING(191),
+      allowNull: true,
+      unique: true,
+    },
+    avatar: {
+      type: DataTypes.TEXT,
+      allowNull: true,
+    },
   },
   {
     timestamps: true,
