@@ -39,7 +39,7 @@ const MOCK_AMBULANCES = [
 ];
 
 export default function HomePage() {
-  const { location, getLocation, setManualLocation, loading: geoLoading } = useGeolocation();
+  const { location, getLocation, setManualLocation, loading: geoLoading, error: geoError } = useGeolocation();
   const [ambulances, setAmbulances] = useState(MOCK_AMBULANCES);
   const [selectedFilter, setSelectedFilter] = useState('All');
   const [searchQuery, setSearchQuery] = useState('');
@@ -48,6 +48,18 @@ export default function HomePage() {
   const [loading, setLoading] = useState(false);
   const [mapCenter, setMapCenter] = useState([23.8103, 90.4125]);
   const [liveDriverPos, setLiveDriverPos] = useState(null);
+  const [showAreaPicker, setShowAreaPicker] = useState(false);
+  const [locationSuccessMsg, setLocationSuccessMsg] = useState('');
+
+  // Preset landmarks in Bangladesh
+  const PRESET_AREAS = [
+    { name: 'Daffodil Smart City (Ashulia)', lat: 23.8768, lng: 90.3204, icon: '🎓' },
+    { name: 'Dhanmondi, Dhaka', lat: 23.7461, lng: 90.3742, icon: '🏥' },
+    { name: 'Gulshan 2, Dhaka', lat: 23.7925, lng: 90.4078, icon: '🏢' },
+    { name: 'Uttara Sector 7, Dhaka', lat: 23.8759, lng: 90.3795, icon: '🚆' },
+    { name: 'Mirpur 10 Circle, Dhaka', lat: 23.8069, lng: 90.3687, icon: '🏙️' },
+    { name: 'Dhaka Central (DMCH)', lat: 23.7258, lng: 90.3975, icon: '🏛️' },
+  ];
 
   // Auto-center map on user location
   useEffect(() => {
@@ -132,9 +144,32 @@ export default function HomePage() {
     return allAmbulances.filter((a) => a.type?.toLowerCase() === typeId.toLowerCase()).length;
   };
 
-  const handleMapClick = (coords) => {
-    setManualLocation(coords, 'Pinned by You');
-    setMapCenter([coords.lat, coords.lng]);
+  const handleMapClick = async (coords) => {
+    const loc = await setManualLocation(coords);
+    if (loc) {
+      setMapCenter([coords.lat, coords.lng]);
+      setLocationSuccessMsg(`📍 Location pinned: ${loc.label || 'Selected on Map'}`);
+      setTimeout(() => setLocationSuccessMsg(''), 4000);
+    }
+  };
+
+  const handleLocateMe = async () => {
+    const loc = await getLocation({ forceFresh: true });
+    if (loc && typeof loc.lat === 'number' && typeof loc.lng === 'number') {
+      setMapCenter([loc.lat, loc.lng]);
+      setLocationSuccessMsg(`📍 Live GPS detected: ${loc.label || 'Your Location'}`);
+      setTimeout(() => setLocationSuccessMsg(''), 4000);
+    }
+  };
+
+  const handleSelectPresetArea = async (area) => {
+    const loc = await setManualLocation({ lat: area.lat, lng: area.lng }, area.name);
+    if (loc) {
+      setMapCenter([area.lat, area.lng]);
+      setShowAreaPicker(false);
+      setLocationSuccessMsg(`📍 Selected Area: ${area.name}`);
+      setTimeout(() => setLocationSuccessMsg(''), 4000);
+    }
   };
 
   return (
@@ -219,18 +254,75 @@ export default function HomePage() {
               </span>
             </div>
 
-            <div className="flex items-center gap-2 shrink-0">
+            <div className="flex items-center gap-1.5 shrink-0">
               <button
                 type="button"
-                onClick={getLocation}
-                disabled={geoLoading}
-                className="flex items-center gap-1 text-[11px] font-bold text-blue-600 hover:text-blue-700 bg-blue-50 px-2 py-1 rounded-lg border border-blue-200"
+                onClick={() => setShowAreaPicker((v) => !v)}
+                className="text-[11px] font-semibold text-slate-600 dark:text-slate-300 hover:text-blue-600 bg-slate-100 dark:bg-slate-800 px-2.5 py-1.5 rounded-xl border border-slate-200 dark:border-slate-700 transition"
+                title="Select from popular areas"
               >
-                <Navigation size={11} className={geoLoading ? 'animate-spin' : ''} />
-                Locate Me
+                Areas ▾
+              </button>
+
+              <button
+                type="button"
+                onClick={handleLocateMe}
+                disabled={geoLoading}
+                className="flex items-center gap-1 text-[11px] font-bold text-blue-600 hover:text-blue-700 bg-blue-50 hover:bg-blue-100 dark:bg-blue-950/40 dark:text-blue-300 px-2.5 py-1.5 rounded-xl border border-blue-200 dark:border-blue-800 transition shadow-xs active:scale-95 disabled:opacity-60"
+              >
+                <Navigation size={12} className={geoLoading ? 'animate-spin' : ''} />
+                <span>{geoLoading ? 'Locating...' : 'Locate Me'}</span>
               </button>
             </div>
           </div>
+
+          {/* Quick Area Picker Dropdown */}
+          {showAreaPicker && (
+            <div className="p-3 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-xl pointer-events-auto backdrop-blur-md animate-fade-in">
+              <div className="flex items-center justify-between mb-2 pb-1 border-b border-slate-100 dark:border-slate-800">
+                <span className="text-xs font-bold text-slate-700 dark:text-slate-200">
+                  Select Quick Location:
+                </span>
+                <span className="text-[10px] text-slate-400">
+                  Or click directly on map to pin
+                </span>
+              </div>
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-1.5">
+                {PRESET_AREAS.map((area) => (
+                  <button
+                    key={area.name}
+                    type="button"
+                    onClick={() => handleSelectPresetArea(area)}
+                    className="flex items-center gap-1.5 p-2 rounded-xl text-left text-[11px] font-semibold text-slate-700 dark:text-slate-300 hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-950/30 transition border border-transparent hover:border-blue-200 dark:hover:border-blue-800"
+                  >
+                    <span>{area.icon}</span>
+                    <span className="truncate">{area.name}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Location Success Toast */}
+          {locationSuccessMsg && (
+            <div className="px-3.5 py-2 rounded-xl text-xs font-semibold bg-emerald-50 dark:bg-emerald-950/60 border border-emerald-200 dark:border-emerald-800 text-emerald-700 dark:text-emerald-300 pointer-events-auto shadow-md animate-fade-in">
+              {locationSuccessMsg}
+            </div>
+          )}
+
+          {/* Location Error / Guidance */}
+          {geoError && (
+            <div className="px-3.5 py-2 rounded-xl text-[11px] font-medium bg-amber-50 dark:bg-amber-950/60 border border-amber-200 dark:border-amber-800 text-amber-800 dark:text-amber-300 pointer-events-auto shadow-md flex items-center justify-between">
+              <span>⚠️ {geoError}</span>
+              <button
+                type="button"
+                onClick={() => setShowAreaPicker(true)}
+                className="text-amber-700 dark:text-amber-400 font-bold underline ml-2 shrink-0"
+              >
+                Choose Area
+              </button>
+            </div>
+          )}
 
           {/* ── Category Filter Chips: ALL, BASIC, ADVANCED, ICU ── */}
           <div className="flex items-center gap-2 overflow-x-auto pb-1 pointer-events-auto scrollbar-hide">

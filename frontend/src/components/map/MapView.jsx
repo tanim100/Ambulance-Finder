@@ -83,7 +83,7 @@ function MapRecenter({ center, zoom }) {
   const map = useMap();
   useEffect(() => {
     if (center && Array.isArray(center) && center[0] && center[1]) {
-      map.setView(center, zoom || map.getZoom(), { animate: true });
+      map.flyTo(center, zoom || map.getZoom() || 15, { duration: 1.0 });
     }
   }, [center, zoom, map]);
   return null;
