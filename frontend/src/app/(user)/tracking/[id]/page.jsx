@@ -83,7 +83,7 @@ export default function TrackingPage() {
           pickupAddress: 'Patient Current Location',
           driver: {
             name: 'Assigned Driver',
-            phone: '+880 1700-111111',
+            phone: '01942809157',
             rating: 4.9,
             vehicle_number: 'DHA-AMB-4421',
           },
@@ -346,7 +346,7 @@ export default function TrackingPage() {
                   fontSize: '0.88rem', color: 'var(--on-surface-muted)',
                 }}
               >
-                📞 {booking?.driver?.phone || '+880 1700-111111'}
+                📞 {booking?.driver?.user?.phone || booking?.driver?.phone || '01942809157'}
               </div>
 
               {/* Dynamic ETA */}
@@ -362,7 +362,7 @@ export default function TrackingPage() {
 
               {/* Call button */}
               <a
-                href={`tel:${booking?.driver?.phone || '+8801700111111'}`}
+                href={`tel:${(booking?.driver?.user?.phone || booking?.driver?.phone || '01942809157').replace(/[^0-9+]/g, '')}`}
                 className="btn-primary"
                 style={{ textDecoration: 'none', justifyContent: 'center' }}
               >

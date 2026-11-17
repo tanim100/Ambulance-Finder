@@ -39,7 +39,7 @@ const seedData = async (exitOnComplete = true) => {
     const driverUser1 = await User.create({
       name: 'Michael Smith',
       email: 'driver1@ambulance.com',
-      phone: '+1555123456',
+      phone: '01942809157',
       password: 'password123',
       role: 'driver',
     });
@@ -48,7 +48,7 @@ const seedData = async (exitOnComplete = true) => {
     const driverUser2 = await User.create({
       name: 'David Johnson',
       email: 'driver2@ambulance.com',
-      phone: '+1555987654',
+      phone: '01942809157',
       password: 'password123',
       role: 'driver',
     });
