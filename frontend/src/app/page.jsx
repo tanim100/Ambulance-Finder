@@ -45,7 +45,7 @@ const AMBULANCE_FLEET = [
     name: 'Advanced Life Support (ALS)',
     category: 'Cardiac & Severe Respiratory',
     eta: '4 - 6 Mins',
-    baseFare: '৳1,600',
+    baseFare: '৳1,750',
     color: 'from-rose-500 to-amber-500',
     tagColor: 'bg-rose-50 text-rose-700 border-rose-200 dark:bg-rose-950/40 dark:text-rose-300 dark:border-rose-800',
     description: 'Equipped with cardiac defibrillation, IV infusion lines, airway management, and trained paramedics for critical emergencies.',
