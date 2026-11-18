@@ -2,8 +2,6 @@
 // src/app/admin/reports/page.jsx — Admin Reports Dashboard
 
 import { useState, useEffect } from 'react';
-import { jsPDF } from 'jspdf';
-import autoTable from 'jspdf-autotable';
 import Sidebar from '@/components/layout/Sidebar';
 import { BarChart3, TrendingUp, CheckCircle2, XCircle, Clock, DollarSign, Users, Download } from 'lucide-react';
 import { adminAPI } from '@/lib/api';
@@ -126,124 +124,218 @@ export default function ReportsPage() {
   const maxType    = Math.max(...types.map((t) => Number(t.count)), 1);
 
   // ─── PDF Export ───────────────────────────────────────────────────────────────
-  const exportPDF = () => {
-    const doc  = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
-    const now  = new Date().toLocaleString('en-BD', { timeZone: 'Asia/Dhaka' });
-    const pageW = doc.internal.pageSize.getWidth();
+  const exportPDF = async () => {
+    try {
+      const { jsPDF } = await import('jspdf');
+      const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
+      const now = new Date().toLocaleString('en-BD', { timeZone: 'Asia/Dhaka' });
+      const pageW = doc.internal.pageSize.getWidth();
+      const pageH = doc.internal.pageSize.getHeight();
+      let y = 14;
 
-    // ── Header banner ──────────────────────────────────────────────────────────
-    doc.setFillColor(220, 38, 38); // rose-600
-    doc.rect(0, 0, pageW, 30, 'F');
-    doc.setTextColor(255, 255, 255);
-    doc.setFontSize(20);
-    doc.setFont('helvetica', 'bold');
-    doc.text('🚑 AmbulanceFinder', 14, 13);
-    doc.setFontSize(10);
-    doc.setFont('helvetica', 'normal');
-    doc.text('Reports & Analytics — Admin Dashboard', 14, 21);
-    doc.text(`Generated: ${now}`, pageW - 14, 21, { align: 'right' });
+      // ── Header Banner ────────────────────────────────────────────────────────
+      doc.setFillColor(220, 38, 38); // rose-600
+      doc.rect(0, 0, pageW, 28, 'F');
 
-    // ── Summary Overview ───────────────────────────────────────────────────────
-    doc.setTextColor(31, 41, 55);
-    doc.setFontSize(13);
-    doc.setFont('helvetica', 'bold');
-    doc.text('Summary Overview', 14, 42);
+      doc.setTextColor(255, 255, 255);
+      doc.setFontSize(18);
+      doc.setFont('helvetica', 'bold');
+      doc.text('AmbulanceFinder', 14, 12);
 
-    autoTable(doc, {
-      startY: 46,
-      head: [['Metric', 'Value']],
-      body: [
-        ['Total Bookings',  totals.totalBookings?.toLocaleString() || '0'],
-        ['Completed',       totals.completed?.toLocaleString()     || '0'],
-        ['Cancelled',       totals.cancelled?.toLocaleString()     || '0'],
-        ['Pending',         totals.pending?.toLocaleString()       || '0'],
-        ['Total Revenue',   `BDT ${Number(totals.totalRevenue || 0).toLocaleString()}`],
+      doc.setFontSize(9);
+      doc.setFont('helvetica', 'normal');
+      doc.text('Reports & Analytics - Admin Overview', 14, 20);
+      doc.text(`Generated: ${now}`, pageW - 14, 20, { align: 'right' });
+
+      y = 38;
+
+      // Helper to check page break
+      const checkPageBreak = (neededHeight) => {
+        if (y + neededHeight > pageH - 20) {
+          doc.addPage();
+          y = 18;
+        }
+      };
+
+      // ── Section 1: KPI Summary ──────────────────────────────────────────────
+      doc.setTextColor(31, 41, 55);
+      doc.setFontSize(13);
+      doc.setFont('helvetica', 'bold');
+      doc.text('Summary Overview', 14, y);
+      y += 6;
+
+      const kpis = [
+        ['Total Bookings', totals.totalBookings?.toLocaleString() || '0'],
+        ['Completed', totals.completed?.toLocaleString() || '0'],
+        ['Cancelled', totals.cancelled?.toLocaleString() || '0'],
+        ['Pending', totals.pending?.toLocaleString() || '0'],
+        ['Total Revenue', `BDT ${Number(totals.totalRevenue || 0).toLocaleString()}`],
         ['Completion Rate', `${completionRate}%`],
-      ],
-      headStyles:          { fillColor: [220, 38, 38], textColor: 255, fontStyle: 'bold' },
-      alternateRowStyles:  { fillColor: [254, 242, 242] },
-      styles:              { fontSize: 10, cellPadding: 3 },
-      columnStyles:        { 1: { halign: 'right', fontStyle: 'bold' } },
-    });
+      ];
 
-    // ── Monthly Booking Trend ──────────────────────────────────────────────────
-    doc.setFontSize(13);
-    doc.setFont('helvetica', 'bold');
-    doc.text('Monthly Booking Trend', 14, doc.lastAutoTable.finalY + 12);
+      // KPI Table header
+      doc.setFillColor(220, 38, 38);
+      doc.rect(14, y, pageW - 28, 8, 'F');
+      doc.setTextColor(255, 255, 255);
+      doc.setFontSize(9);
+      doc.setFont('helvetica', 'bold');
+      doc.text('Metric', 18, y + 5.5);
+      doc.text('Value', pageW - 18, y + 5.5, { align: 'right' });
+      y += 8;
 
-    autoTable(doc, {
-      startY: doc.lastAutoTable.finalY + 16,
-      head: [['Month', 'Completed', 'Cancelled', 'Pending', 'Revenue (BDT)']],
-      body: monthly.map((m) => [
-        fmtMonth(m.month),
-        m.completed,
-        m.cancelled,
-        m.pending,
-        Number(m.revenue || 0).toLocaleString(),
-      ]),
-      headStyles:         { fillColor: [220, 38, 38], textColor: 255, fontStyle: 'bold' },
-      alternateRowStyles: { fillColor: [254, 242, 242] },
-      styles:             { fontSize: 9, cellPadding: 2.5 },
-      columnStyles:       { 4: { halign: 'right' } },
-    });
+      // KPI Table rows
+      kpis.forEach(([metric, val], idx) => {
+        doc.setFillColor(idx % 2 === 0 ? 254 : 255, idx % 2 === 0 ? 242 : 255, idx % 2 === 0 ? 242 : 255);
+        doc.rect(14, y, pageW - 28, 7, 'F');
+        doc.setDrawColor(243, 244, 246);
+        doc.rect(14, y, pageW - 28, 7, 'S');
 
-    // ── Emergency Type Breakdown ───────────────────────────────────────────────
-    if (types.length > 0) {
+        doc.setTextColor(55, 65, 81);
+        doc.setFont('helvetica', 'normal');
+        doc.text(metric, 18, y + 5);
+
+        doc.setFont('helvetica', 'bold');
+        doc.text(String(val), pageW - 18, y + 5, { align: 'right' });
+        y += 7;
+      });
+
+      y += 10;
+
+      // ── Section 2: Monthly Trends ───────────────────────────────────────────
+      checkPageBreak(50);
+      doc.setTextColor(31, 41, 55);
       doc.setFontSize(13);
       doc.setFont('helvetica', 'bold');
-      doc.text('Emergency Type Breakdown', 14, doc.lastAutoTable.finalY + 12);
+      doc.text('Monthly Booking Trend', 14, y);
+      y += 6;
 
-      autoTable(doc, {
-        startY: doc.lastAutoTable.finalY + 16,
-        head: [['Emergency Type', 'Count']],
-        body: types.map((t) => [t.emergencyType, Number(t.count)]),
-        headStyles:         { fillColor: [220, 38, 38], textColor: 255, fontStyle: 'bold' },
-        alternateRowStyles: { fillColor: [254, 242, 242] },
-        styles:             { fontSize: 9, cellPadding: 2.5 },
-        columnStyles:       { 1: { halign: 'center', fontStyle: 'bold' } },
-      });
-    }
-
-    // ── Top Performing Drivers ─────────────────────────────────────────────────
-    if (drivers.length > 0) {
-      doc.setFontSize(13);
+      // Monthly Table Header
+      doc.setFillColor(220, 38, 38);
+      doc.rect(14, y, pageW - 28, 8, 'F');
+      doc.setTextColor(255, 255, 255);
+      doc.setFontSize(9);
       doc.setFont('helvetica', 'bold');
-      doc.text('Top Performing Drivers', 14, doc.lastAutoTable.finalY + 12);
+      doc.text('Month', 18, y + 5.5);
+      doc.text('Completed', 65, y + 5.5);
+      doc.text('Cancelled', 100, y + 5.5);
+      doc.text('Pending', 135, y + 5.5);
+      doc.text('Revenue (BDT)', pageW - 18, y + 5.5, { align: 'right' });
+      y += 8;
 
-      autoTable(doc, {
-        startY: doc.lastAutoTable.finalY + 16,
-        head: [['#', 'Driver Name', 'Phone', 'Completed Trips', 'Total Earned (BDT)']],
-        body: drivers.map((d, i) => [
-          i + 1,
-          d.name,
-          d.phone || '—',
-          d.completed,
-          Number(d.earned || 0).toLocaleString(),
-        ]),
-        headStyles:         { fillColor: [220, 38, 38], textColor: 255, fontStyle: 'bold' },
-        alternateRowStyles: { fillColor: [254, 242, 242] },
-        styles:             { fontSize: 9, cellPadding: 2.5 },
-        columnStyles:       { 0: { halign: 'center', cellWidth: 10 }, 4: { halign: 'right' } },
+      monthly.forEach((m, idx) => {
+        checkPageBreak(8);
+        doc.setFillColor(idx % 2 === 0 ? 254 : 255, idx % 2 === 0 ? 242 : 255, idx % 2 === 0 ? 242 : 255);
+        doc.rect(14, y, pageW - 28, 7, 'F');
+        doc.setDrawColor(243, 244, 246);
+        doc.rect(14, y, pageW - 28, 7, 'S');
+
+        doc.setTextColor(55, 65, 81);
+        doc.setFont('helvetica', 'normal');
+        doc.text(fmtMonth(m.month), 18, y + 5);
+        doc.text(String(m.completed), 65, y + 5);
+        doc.text(String(m.cancelled), 100, y + 5);
+        doc.text(String(m.pending), 135, y + 5);
+        doc.setFont('helvetica', 'bold');
+        doc.text(Number(m.revenue || 0).toLocaleString(), pageW - 18, y + 5, { align: 'right' });
+        y += 7;
       });
-    }
 
-    // ── Page footer on every page ──────────────────────────────────────────────
-    const pageCount = doc.internal.getNumberOfPages();
-    for (let i = 1; i <= pageCount; i++) {
-      doc.setPage(i);
-      doc.setFontSize(8);
-      doc.setTextColor(156, 163, 175);
-      doc.text(
-        `AmbulanceFinder Admin Report  |  Page ${i} of ${pageCount}  |  Confidential`,
-        pageW / 2,
-        doc.internal.pageSize.getHeight() - 8,
-        { align: 'center' },
-      );
-    }
+      y += 10;
 
-    // ── Save file ──────────────────────────────────────────────────────────────
-    const fileName = `AmbulanceFinder_Report_${new Date().toISOString().slice(0, 10)}.pdf`;
-    doc.save(fileName);
+      // ── Section 3: Emergency Type Breakdown ─────────────────────────────────
+      if (types.length > 0) {
+        checkPageBreak(40);
+        doc.setTextColor(31, 41, 55);
+        doc.setFontSize(13);
+        doc.setFont('helvetica', 'bold');
+        doc.text('Emergency Type Breakdown', 14, y);
+        y += 6;
+
+        doc.setFillColor(220, 38, 38);
+        doc.rect(14, y, pageW - 28, 8, 'F');
+        doc.setTextColor(255, 255, 255);
+        doc.setFontSize(9);
+        doc.setFont('helvetica', 'bold');
+        doc.text('Emergency Type', 18, y + 5.5);
+        doc.text('Incident Count', pageW - 18, y + 5.5, { align: 'right' });
+        y += 8;
+
+        types.forEach((t, idx) => {
+          checkPageBreak(8);
+          doc.setFillColor(idx % 2 === 0 ? 254 : 255, idx % 2 === 0 ? 242 : 255, idx % 2 === 0 ? 242 : 255);
+          doc.rect(14, y, pageW - 28, 7, 'F');
+          doc.setDrawColor(243, 244, 246);
+          doc.rect(14, y, pageW - 28, 7, 'S');
+
+          doc.setTextColor(55, 65, 81);
+          doc.setFont('helvetica', 'normal');
+          doc.text(t.emergencyType || 'General', 18, y + 5);
+          doc.setFont('helvetica', 'bold');
+          doc.text(String(t.count), pageW - 18, y + 5, { align: 'right' });
+          y += 7;
+        });
+        y += 10;
+      }
+
+      // ── Section 4: Top Drivers ──────────────────────────────────────────────
+      if (drivers.length > 0) {
+        checkPageBreak(40);
+        doc.setTextColor(31, 41, 55);
+        doc.setFontSize(13);
+        doc.setFont('helvetica', 'bold');
+        doc.text('Top Performing Drivers', 14, y);
+        y += 6;
+
+        doc.setFillColor(220, 38, 38);
+        doc.rect(14, y, pageW - 28, 8, 'F');
+        doc.setTextColor(255, 255, 255);
+        doc.setFontSize(9);
+        doc.setFont('helvetica', 'bold');
+        doc.text('#', 18, y + 5.5);
+        doc.text('Driver Name', 28, y + 5.5);
+        doc.text('Phone', 85, y + 5.5);
+        doc.text('Completed Trips', 130, y + 5.5);
+        doc.text('Total Earned (BDT)', pageW - 18, y + 5.5, { align: 'right' });
+        y += 8;
+
+        drivers.forEach((d, idx) => {
+          checkPageBreak(8);
+          doc.setFillColor(idx % 2 === 0 ? 254 : 255, idx % 2 === 0 ? 242 : 255, idx % 2 === 0 ? 242 : 255);
+          doc.rect(14, y, pageW - 28, 7, 'F');
+          doc.setDrawColor(243, 244, 246);
+          doc.rect(14, y, pageW - 28, 7, 'S');
+
+          doc.setTextColor(55, 65, 81);
+          doc.setFont('helvetica', 'normal');
+          doc.text(String(idx + 1), 18, y + 5);
+          doc.text(d.name || '—', 28, y + 5);
+          doc.text(d.phone || '—', 85, y + 5);
+          doc.text(String(d.completed || 0), 130, y + 5);
+          doc.setFont('helvetica', 'bold');
+          doc.text(Number(d.earned || 0).toLocaleString(), pageW - 18, y + 5, { align: 'right' });
+          y += 7;
+        });
+      }
+
+      // ── Footer ──────────────────────────────────────────────────────────────
+      const totalPages = doc.internal.getNumberOfPages();
+      for (let p = 1; p <= totalPages; p++) {
+        doc.setPage(p);
+        doc.setFontSize(8);
+        doc.setTextColor(156, 163, 175);
+        doc.text(
+          `AmbulanceFinder Admin Report  |  Page ${p} of ${totalPages}  |  Confidential`,
+          pageW / 2,
+          pageH - 8,
+          { align: 'center' },
+        );
+      }
+
+      const fileName = `AmbulanceFinder_Report_${new Date().toISOString().slice(0, 10)}.pdf`;
+      doc.save(fileName);
+    } catch (err) {
+      console.error('Failed to export PDF:', err);
+    }
   };
 
   return (
