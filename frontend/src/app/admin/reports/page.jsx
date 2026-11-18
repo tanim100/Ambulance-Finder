@@ -2,6 +2,8 @@
 // src/app/admin/reports/page.jsx — Admin Reports Dashboard
 
 import { useState, useEffect } from 'react';
+import { jsPDF } from 'jspdf';
+import autoTable from 'jspdf-autotable';
 import Sidebar from '@/components/layout/Sidebar';
 import { BarChart3, TrendingUp, CheckCircle2, XCircle, Clock, DollarSign, Users, Download } from 'lucide-react';
 import { adminAPI } from '@/lib/api';
@@ -123,6 +125,127 @@ export default function ReportsPage() {
   const maxMonthly = Math.max(...monthly.map((m) => m.completed + m.cancelled + m.pending), 1);
   const maxType    = Math.max(...types.map((t) => Number(t.count)), 1);
 
+  // ─── PDF Export ───────────────────────────────────────────────────────────────
+  const exportPDF = () => {
+    const doc  = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
+    const now  = new Date().toLocaleString('en-BD', { timeZone: 'Asia/Dhaka' });
+    const pageW = doc.internal.pageSize.getWidth();
+
+    // ── Header banner ──────────────────────────────────────────────────────────
+    doc.setFillColor(220, 38, 38); // rose-600
+    doc.rect(0, 0, pageW, 30, 'F');
+    doc.setTextColor(255, 255, 255);
+    doc.setFontSize(20);
+    doc.setFont('helvetica', 'bold');
+    doc.text('🚑 AmbulanceFinder', 14, 13);
+    doc.setFontSize(10);
+    doc.setFont('helvetica', 'normal');
+    doc.text('Reports & Analytics — Admin Dashboard', 14, 21);
+    doc.text(`Generated: ${now}`, pageW - 14, 21, { align: 'right' });
+
+    // ── Summary Overview ───────────────────────────────────────────────────────
+    doc.setTextColor(31, 41, 55);
+    doc.setFontSize(13);
+    doc.setFont('helvetica', 'bold');
+    doc.text('Summary Overview', 14, 42);
+
+    autoTable(doc, {
+      startY: 46,
+      head: [['Metric', 'Value']],
+      body: [
+        ['Total Bookings',  totals.totalBookings?.toLocaleString() || '0'],
+        ['Completed',       totals.completed?.toLocaleString()     || '0'],
+        ['Cancelled',       totals.cancelled?.toLocaleString()     || '0'],
+        ['Pending',         totals.pending?.toLocaleString()       || '0'],
+        ['Total Revenue',   `BDT ${Number(totals.totalRevenue || 0).toLocaleString()}`],
+        ['Completion Rate', `${completionRate}%`],
+      ],
+      headStyles:          { fillColor: [220, 38, 38], textColor: 255, fontStyle: 'bold' },
+      alternateRowStyles:  { fillColor: [254, 242, 242] },
+      styles:              { fontSize: 10, cellPadding: 3 },
+      columnStyles:        { 1: { halign: 'right', fontStyle: 'bold' } },
+    });
+
+    // ── Monthly Booking Trend ──────────────────────────────────────────────────
+    doc.setFontSize(13);
+    doc.setFont('helvetica', 'bold');
+    doc.text('Monthly Booking Trend', 14, doc.lastAutoTable.finalY + 12);
+
+    autoTable(doc, {
+      startY: doc.lastAutoTable.finalY + 16,
+      head: [['Month', 'Completed', 'Cancelled', 'Pending', 'Revenue (BDT)']],
+      body: monthly.map((m) => [
+        fmtMonth(m.month),
+        m.completed,
+        m.cancelled,
+        m.pending,
+        Number(m.revenue || 0).toLocaleString(),
+      ]),
+      headStyles:         { fillColor: [220, 38, 38], textColor: 255, fontStyle: 'bold' },
+      alternateRowStyles: { fillColor: [254, 242, 242] },
+      styles:             { fontSize: 9, cellPadding: 2.5 },
+      columnStyles:       { 4: { halign: 'right' } },
+    });
+
+    // ── Emergency Type Breakdown ───────────────────────────────────────────────
+    if (types.length > 0) {
+      doc.setFontSize(13);
+      doc.setFont('helvetica', 'bold');
+      doc.text('Emergency Type Breakdown', 14, doc.lastAutoTable.finalY + 12);
+
+      autoTable(doc, {
+        startY: doc.lastAutoTable.finalY + 16,
+        head: [['Emergency Type', 'Count']],
+        body: types.map((t) => [t.emergencyType, Number(t.count)]),
+        headStyles:         { fillColor: [220, 38, 38], textColor: 255, fontStyle: 'bold' },
+        alternateRowStyles: { fillColor: [254, 242, 242] },
+        styles:             { fontSize: 9, cellPadding: 2.5 },
+        columnStyles:       { 1: { halign: 'center', fontStyle: 'bold' } },
+      });
+    }
+
+    // ── Top Performing Drivers ─────────────────────────────────────────────────
+    if (drivers.length > 0) {
+      doc.setFontSize(13);
+      doc.setFont('helvetica', 'bold');
+      doc.text('Top Performing Drivers', 14, doc.lastAutoTable.finalY + 12);
+
+      autoTable(doc, {
+        startY: doc.lastAutoTable.finalY + 16,
+        head: [['#', 'Driver Name', 'Phone', 'Completed Trips', 'Total Earned (BDT)']],
+        body: drivers.map((d, i) => [
+          i + 1,
+          d.name,
+          d.phone || '—',
+          d.completed,
+          Number(d.earned || 0).toLocaleString(),
+        ]),
+        headStyles:         { fillColor: [220, 38, 38], textColor: 255, fontStyle: 'bold' },
+        alternateRowStyles: { fillColor: [254, 242, 242] },
+        styles:             { fontSize: 9, cellPadding: 2.5 },
+        columnStyles:       { 0: { halign: 'center', cellWidth: 10 }, 4: { halign: 'right' } },
+      });
+    }
+
+    // ── Page footer on every page ──────────────────────────────────────────────
+    const pageCount = doc.internal.getNumberOfPages();
+    for (let i = 1; i <= pageCount; i++) {
+      doc.setPage(i);
+      doc.setFontSize(8);
+      doc.setTextColor(156, 163, 175);
+      doc.text(
+        `AmbulanceFinder Admin Report  |  Page ${i} of ${pageCount}  |  Confidential`,
+        pageW / 2,
+        doc.internal.pageSize.getHeight() - 8,
+        { align: 'center' },
+      );
+    }
+
+    // ── Save file ──────────────────────────────────────────────────────────────
+    const fileName = `AmbulanceFinder_Report_${new Date().toISOString().slice(0, 10)}.pdf`;
+    doc.save(fileName);
+  };
+
   return (
     <div className="min-h-screen bg-gray-50">
       <Sidebar />
@@ -138,10 +261,12 @@ export default function ReportsPage() {
               <p className="text-sm text-gray-500">Booking trends, revenue, and performance overview</p>
             </div>
             <button
-              onClick={() => window.print()}
-              className="flex items-center gap-2 border border-gray-200 text-gray-700 px-4 py-2 rounded-xl text-sm font-semibold hover:bg-gray-50 transition-colors"
+              onClick={exportPDF}
+              disabled={loading}
+              className="flex items-center gap-2 border border-gray-200 text-gray-700 px-4 py-2 rounded-xl text-sm font-semibold hover:bg-gray-50 hover:border-primary-300 hover:text-primary-700 transition-all active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              <Download size={15} /> Export
+              <Download size={15} />
+              {loading ? 'Loading...' : 'Export PDF'}
             </button>
           </div>
           {error && (
