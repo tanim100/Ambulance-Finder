@@ -310,7 +310,7 @@ export default function LandingPage() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6">
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-8">
             {[
-              { val: '500+', label: 'Registered Ambulances', sub: 'Across 64 districts', icon: Ambulance },
+              { val: '550+', label: 'Registered Ambulances', sub: 'Across 64 districts', icon: Ambulance },
               { val: '< 4.5 Mins', label: 'Average Arrival Time', sub: 'From request to door', icon: Clock },
               { val: '24/7/365', label: 'Continuous Dispatch', sub: 'Active control room', icon: Radio },
               { val: '15,000+', label: 'Emergency Rescues', sub: '99.4% satisfaction', icon: HeartPulse },
