@@ -40,7 +40,7 @@ const DEFAULT_SETTINGS = {
   // Pricing
   baseFareBasic: 500,
   baseFareAdvanced: 1000,
-  baseFareICU: 2000,
+  baseFareICU: 4500,
   ratePerKm: 35,
   nightSurgeMultiplier: 1.25,
 
