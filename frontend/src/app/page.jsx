@@ -67,7 +67,7 @@ const AMBULANCE_FLEET = [
     name: 'Freezing Mortuary Ambulance',
     category: 'Dignified Long-Distance',
     eta: '10 - 15 Mins',
-    baseFare: '৳3,600',
+    baseFare: '৳4,000',
     color: 'from-slate-600 to-slate-800',
     tagColor: 'bg-slate-100 text-slate-700 border-slate-300 dark:bg-slate-800 dark:text-slate-300 dark:border-slate-700',
     description: 'Temperature-controlled mortuary transport preserved between -5°C to -15°C for inter-district respectful journeys.',
