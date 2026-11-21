@@ -7,7 +7,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 const DEFAULT_FALLBACK = {
   lat: 23.8103,
   lng: 90.4125,
-  accuracy: 100,
+  accuracy: 9999,
   source: 'default',
   label: 'Dhaka Central, Bangladesh',
 };
@@ -21,7 +21,8 @@ export async function reverseGeocode(lat, lng) {
       `https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}&zoom=18&addressdetails=1`,
       {
         headers: {
-          'Accept-Language': 'en,bn',
+          'Accept-Language': 'en',
+          'User-Agent': 'AmbulanceFinderApp/1.0',
         },
       }
     );
@@ -59,72 +60,26 @@ export function useGeolocation() {
   const [permissionState, setPermissionState] = useState('prompt');
   const hasDetectedRef = useRef(false);
 
-  // 1. Fetch approximate location via IP only as initial seed if nothing else is available
-  const fetchIPLocation = useCallback(async () => {
-    try {
-      const res = await fetch('https://freeipapi.com/api/json');
-      if (res.ok) {
-        const data = await res.json();
-        if (data && typeof data.latitude === 'number' && typeof data.longitude === 'number') {
-          const detectedLoc = {
-            lat: data.latitude,
-            lng: data.longitude,
-            accuracy: 1000,
-            source: 'network-ip',
-            label: `${data.cityName || 'Dhaka'}, ${data.countryName || 'Bangladesh'} (Network IP)`,
-            city: data.cityName,
-            ip: data.ipAddress,
-          };
-          if (!hasDetectedRef.current) {
-            setLocation(detectedLoc);
-          }
-          return detectedLoc;
-        }
-      }
-    } catch (e) {
-      console.warn('IP geolocation notice:', e?.message || e);
-    }
-    return DEFAULT_FALLBACK;
-  }, []);
-
-  // 2. High-precision browser geolocation with forceFresh option
+  // High-precision browser geolocation — ALWAYS fresh reading (maximumAge: 0)
   const getLocation = useCallback(
-    async ({ forceFresh = false } = {}) => {
+    async ({ forceFresh = true } = {}) => {
       if (typeof window === 'undefined') return null;
-
-      // If not forced fresh, check if user previously saved a location
-      if (!forceFresh) {
-        try {
-          const saved = localStorage.getItem('user_last_location');
-          if (saved) {
-            const parsed = JSON.parse(saved);
-            if (parsed?.lat && parsed?.lng) {
-              setLocation(parsed);
-              return parsed;
-            }
-          }
-        } catch {}
-      }
 
       if (!navigator.geolocation) {
         setError('Geolocation is not supported by your browser.');
-        const ipLoc = await fetchIPLocation();
-        return ipLoc;
+        return DEFAULT_FALLBACK;
       }
 
       setLoading(true);
       setError(null);
 
       return new Promise((resolve) => {
-        // Strategy A: High-accuracy GPS with 12s timeout and fresh reading (maximumAge: 0)
+        // Strategy A: High-accuracy GPS with 15s timeout, no cached reading
         navigator.geolocation.getCurrentPosition(
-          async (pos) => {
+          (pos) => {
             hasDetectedRef.current = true;
             const lat = pos.coords.latitude;
             const lng = pos.coords.longitude;
-
-            // Reverse geocode to get real neighborhood/area name
-            const areaName = await reverseGeocode(lat, lng);
 
             const gpsLoc = {
               lat,
@@ -133,16 +88,21 @@ export function useGeolocation() {
               speed: pos.coords.speed,
               heading: pos.coords.heading,
               source: 'device-gps',
-              label: areaName || 'Exact Live Device Location (GPS)',
+              label: 'Live Device GPS',
             };
 
             setLocation(gpsLoc);
             setLoading(false);
             setError(null);
             setPermissionState('granted');
-            try {
-              localStorage.setItem('user_last_location', JSON.stringify(gpsLoc));
-            } catch {}
+
+            // Reverse geocode in background (non-blocking)
+            reverseGeocode(lat, lng).then((areaName) => {
+              if (areaName) {
+                setLocation((prev) => ({ ...prev, label: areaName }));
+              }
+            });
+
             resolve(gpsLoc);
           },
           (err) => {
@@ -150,74 +110,76 @@ export function useGeolocation() {
 
             // Strategy B: Fallback to low-accuracy / WiFi / network triangulation
             navigator.geolocation.getCurrentPosition(
-              async (pos) => {
+              (pos) => {
                 hasDetectedRef.current = true;
                 const lat = pos.coords.latitude;
                 const lng = pos.coords.longitude;
-
-                const areaName = await reverseGeocode(lat, lng);
 
                 const wifiLoc = {
                   lat,
                   lng,
                   accuracy: pos.coords.accuracy,
                   source: 'device-wifi',
-                  label: areaName || 'Exact Device Location (WiFi / Network)',
+                  label: 'Device Location (WiFi/Network)',
                 };
 
                 setLocation(wifiLoc);
                 setLoading(false);
                 setError(null);
                 setPermissionState('granted');
-                try {
-                  localStorage.setItem('user_last_location', JSON.stringify(wifiLoc));
-                } catch {}
+
+                reverseGeocode(lat, lng).then((areaName) => {
+                  if (areaName) {
+                    setLocation((prev) => ({ ...prev, label: areaName }));
+                  }
+                });
+
                 resolve(wifiLoc);
               },
-              async (fallbackErr) => {
+              (fallbackErr) => {
                 setLoading(false);
                 if (err.code === 1 || fallbackErr.code === 1) {
                   setPermissionState('denied');
-                  setError('Location permission denied in browser. Click anywhere on map to set your location.');
+                  setError('Location permission denied. Click on the map to set your location manually.');
                 } else {
-                  setError('GPS unavailable on this PC. Click map or select an area below.');
+                  setError('GPS unavailable. Click on the map to set your location.');
                 }
                 resolve(null);
               },
-              { enableHighAccuracy: false, timeout: 8000, maximumAge: 0 }
+              { enableHighAccuracy: false, timeout: 10000, maximumAge: 0 }
             );
           },
-          { enableHighAccuracy: true, timeout: 12000, maximumAge: 0 }
+          { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 }
         );
       });
     },
-    [fetchIPLocation]
+    []
   );
 
-  // 3. Continuous device GPS watcher
+  // Continuous device GPS watcher — high accuracy, no cached readings
   const watchLocation = useCallback(() => {
     if (typeof window === 'undefined' || !navigator.geolocation) return null;
 
     try {
       const watchId = navigator.geolocation.watchPosition(
-        async (pos) => {
+        (pos) => {
           hasDetectedRef.current = true;
-          const lat = pos.coords.latitude;
-          const lng = pos.coords.longitude;
           const liveLoc = {
-            lat,
-            lng,
+            lat: pos.coords.latitude,
+            lng: pos.coords.longitude,
             accuracy: pos.coords.accuracy,
             speed: pos.coords.speed,
             heading: pos.coords.heading,
             source: 'device-gps-live',
-            label: 'Exact Live GPS',
+            label: 'Live GPS',
           };
           setLocation(liveLoc);
           setPermissionState('granted');
         },
-        () => {},
-        { enableHighAccuracy: false, timeout: 10000, maximumAge: 5000 }
+        (err) => {
+          console.warn('watchPosition error:', err.message);
+        },
+        { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 }
       );
       return watchId;
     } catch {
@@ -231,7 +193,7 @@ export function useGeolocation() {
     }
   }, []);
 
-  // 4. Manually set exact location (via map click or quick preset) with automatic reverse geocode
+  // Manually set exact location (via map click or quick preset) with automatic reverse geocode
   const setManualLocation = useCallback(async (coords, customLabel = null) => {
     if (coords && typeof coords.lat === 'number' && typeof coords.lng === 'number') {
       let finalLabel = customLabel;
@@ -251,16 +213,14 @@ export function useGeolocation() {
       hasDetectedRef.current = true;
       setLocation(manualLoc);
       setError(null);
-      try {
-        localStorage.setItem('user_last_location', JSON.stringify(manualLoc));
-      } catch {}
       return manualLoc;
     }
     return null;
   }, []);
 
+  // Auto-detect on mount — always get fresh GPS
   useEffect(() => {
-    getLocation({ forceFresh: false });
+    getLocation({ forceFresh: true });
   }, [getLocation]);
 
   return {

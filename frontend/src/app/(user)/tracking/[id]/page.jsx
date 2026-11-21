@@ -6,7 +6,8 @@ import dynamic from 'next/dynamic';
 import Link from 'next/link';
 import { bookingAPI } from '@/lib/api';
 import io from 'socket.io-client';
-import { subscribeToAmbulanceLocation } from '@/lib/firebaseTracking';
+import { rtdb } from '@/lib/firebase';
+import { ref, onValue, off } from 'firebase/database';
 
 // Leaflet map — no SSR
 const MapComponent = dynamic(() => import('@/components/map/MapComponent'), { ssr: false });
@@ -71,8 +72,8 @@ export default function TrackingPage() {
         const pLng = Number(b.pickupLng ?? b.pickup_lng ?? userExactLoc.lng);
         setPatientPos({ lat: pLat, lng: pLng });
 
-        // Initial driver position near pickup
-        setDriverPos({ lat: pLat - 0.008, lng: pLng + 0.006 });
+        // Don't set a fake driver position — wait for Firebase live data
+        setDriverPos(null);
       } catch {
         // Fall back to active trip with user's exact detected location
         const fallbackBooking = {
@@ -90,7 +91,7 @@ export default function TrackingPage() {
         };
         setBooking(fallbackBooking);
         setPatientPos(userExactLoc);
-        setDriverPos({ lat: userExactLoc.lat - 0.008, lng: userExactLoc.lng + 0.006 });
+        setDriverPos(null); // Wait for real Firebase data
       } finally {
         setLoading(false);
       }
@@ -120,30 +121,56 @@ export default function TrackingPage() {
       }
     };
 
-    // 1. Subscribe to Firebase Realtime stream
-    const unsubscribeFirebase = subscribeToAmbulanceLocation(id, handleLocationUpdate);
+    // 1. Subscribe to Firebase RTDB — always listen to active_trip (where driver writes)
+    //    Also listen to the specific booking ID path as fallback
+    const cleanups = [];
+
+    if (rtdb) {
+      const paths = ['live_tracking/active_trip'];
+      // Also subscribe by booking id if it's not 'active_trip'
+      if (id && id !== 'active_trip') {
+        paths.push(`live_tracking/${id}`);
+      }
+
+      paths.forEach((path) => {
+        try {
+          const locRef = ref(rtdb, path);
+          onValue(locRef, (snapshot) => {
+            const val = snapshot.val();
+            if (val && typeof val.lat === 'number' && typeof val.lng === 'number') {
+              handleLocationUpdate(val);
+            }
+          });
+          cleanups.push(() => off(locRef));
+        } catch (e) {
+          console.warn('Firebase subscribe error:', e.message);
+        }
+      });
+    }
 
     // 2. Socket.io fallback
     try {
-      socketRef.current = io(process.env.NEXT_PUBLIC_SOCKET_URL || 'http://localhost:5000', {
+      const socket = io(process.env.NEXT_PUBLIC_SOCKET_URL || 'http://localhost:5000', {
         auth: { token },
         transports: ['websocket'],
       });
+      socketRef.current = socket;
 
-      socketRef.current.emit('join_booking', id);
+      socket.emit('join_booking', id);
 
-      socketRef.current.on('location_update', ({ lat, lng, speed }) => {
+      socket.on('location_update', ({ lat, lng, speed }) => {
         handleLocationUpdate({ lat, lng, speed, source: 'Socket.io Server' });
       });
 
-      socketRef.current.on('booking_status_update', ({ status }) => {
+      socket.on('booking_status_update', ({ status }) => {
         setBooking((prev) => ({ ...prev, status }));
       });
+
+      cleanups.push(() => socket.disconnect());
     } catch {}
 
     return () => {
-      unsubscribeFirebase();
-      socketRef.current?.disconnect();
+      cleanups.forEach((fn) => { try { fn(); } catch {} });
     };
   }, [booking, id]);
 

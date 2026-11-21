@@ -50,18 +50,14 @@ export default function DriverActivePage() {
   const [updating, setUpdating] = useState(false);
   const [completed, setCompleted] = useState(false);
 
-  // Driver current coordinates
-  const [activeLoc, setActiveLoc] = useState({
-    lat: 23.8103,
-    lng: 90.4125,
-    speed: 40,
-    heading: 90,
-    source: 'Real Live Device Network/GPS',
-  });
+  // Driver current coordinates — start with null so we don't use fake Dhaka default
+  const [activeLoc, setActiveLoc] = useState(null);
+  const gpsWatchIdRef = useRef(null);
 
   const [isSimulating, setIsSimulating] = useState(false);
   const [shutterState, setShutterState] = useState('half'); // 'collapsed' | 'half' | 'expanded'
   const touchStartY = useRef(0);
+  const isSimulatingRef = useRef(false);
   const [firebaseStatus, setFirebaseStatus] = useState({
     connected: false,
     lastSyncTime: null,
@@ -74,7 +70,7 @@ export default function DriverActivePage() {
 
   const currentIdx = TRIP_STATUSES.indexOf(trip.status);
 
-  // Test Firebase on mount
+  // Test Firebase on mount + start continuous GPS watch
   useEffect(() => {
     testFirebaseConnection().then((res) => {
       if (res.ok) {
@@ -85,6 +81,35 @@ export default function DriverActivePage() {
         }));
       }
     });
+
+    // Start continuous GPS watch immediately
+    if (navigator.geolocation) {
+      gpsWatchIdRef.current = navigator.geolocation.watchPosition(
+        (pos) => {
+          if (isSimulatingRef.current) return; // skip if simulating
+          const newLoc = {
+            lat: pos.coords.latitude,
+            lng: pos.coords.longitude,
+            accuracy: pos.coords.accuracy,
+            speed: pos.coords.speed ? Math.round(pos.coords.speed * 3.6) : 0,
+            heading: pos.coords.heading || 0,
+            source: 'Live Device GPS (Continuous)',
+          };
+          setActiveLoc(newLoc);
+        },
+        (err) => {
+          console.warn('GPS watch error:', err.message);
+        },
+        { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 }
+      );
+    }
+
+    return () => {
+      if (gpsWatchIdRef.current) {
+        navigator.geolocation.clearWatch(gpsWatchIdRef.current);
+      }
+    };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // Listen to patient exact location from Firebase
@@ -106,17 +131,25 @@ export default function DriverActivePage() {
     } catch {}
   }, []);
 
-  // Update activeLoc whenever device hardware GPS or location arrives
+  // Keep isSimulatingRef in sync with state so the GPS watch callback can check it
+  useEffect(() => {
+    isSimulatingRef.current = isSimulating;
+  }, [isSimulating]);
+
+  // Update activeLoc whenever device hardware GPS or location arrives (from useGeolocation hook)
   useEffect(() => {
     if (geoLoc && typeof geoLoc.lat === 'number' && typeof geoLoc.lng === 'number' && !isSimulating) {
-      setActiveLoc((prev) => ({
-        ...prev,
-        lat: geoLoc.lat,
-        lng: geoLoc.lng,
-        speed: geoLoc.speed ? Math.round(geoLoc.speed * 3.6) : (prev.speed || 40),
-        heading: geoLoc.heading || prev.heading || 0,
-        source: geoLoc.label || 'Real Device Location',
-      }));
+      // Only use if it's real GPS (not default fallback Dhaka)
+      if (geoLoc.source !== 'default') {
+        setActiveLoc((prev) => ({
+          ...prev,
+          lat: geoLoc.lat,
+          lng: geoLoc.lng,
+          speed: geoLoc.speed ? Math.round(geoLoc.speed * 3.6) : (prev?.speed || 0),
+          heading: geoLoc.heading || prev?.heading || 0,
+          source: geoLoc.label || 'Real Device Location',
+        }));
+      }
     }
   }, [geoLoc, isSimulating]);
 
@@ -132,12 +165,12 @@ export default function DriverActivePage() {
       const res = await updateAmbulanceLocation(trip._id, {
         lat: coords.lat,
         lng: coords.lng,
-        speed: coords.speed || 35,
+        speed: coords.speed || 0,
         heading: coords.heading || 0,
         status: currentStatus,
         driverName: 'Assigned Driver',
         vehicleNumber: trip.vehicleNumber || 'DHA-AMB-4421',
-        source: coords.source || 'Real Live Device Network/GPS',
+        source: coords.source || 'Live Device GPS',
       });
 
       setFirebaseStatus({
@@ -395,7 +428,7 @@ export default function DriverActivePage() {
         {/* Full-view Leaflet Map */}
         <div className="absolute inset-0 z-0">
           <MapView
-            center={activeLoc ? [activeLoc.lat, activeLoc.lng] : [23.8103, 90.4125]}
+            center={activeLoc ? [activeLoc.lat, activeLoc.lng] : (trip.userLocation ? [trip.userLocation.lat, trip.userLocation.lng] : [23.8103, 90.4125])}
             userLocation={trip.userLocation}
             driverLocation={activeLoc}
             onLocationSelect={handleMapClick}
@@ -557,15 +590,15 @@ export default function DriverActivePage() {
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs font-mono bg-emerald-50/50 p-2.5 rounded-xl border border-emerald-100">
                 <div>
                   <span className="text-gray-400 block text-[10px]">LATITUDE</span>
-                  <span className="font-bold text-emerald-900">{activeLoc.lat.toFixed(5)}</span>
+                  <span className="font-bold text-emerald-900">{activeLoc ? activeLoc.lat.toFixed(5) : 'Detecting...'}</span>
                 </div>
                 <div>
                   <span className="text-gray-400 block text-[10px]">LONGITUDE</span>
-                  <span className="font-bold text-emerald-900">{activeLoc.lng.toFixed(5)}</span>
+                  <span className="font-bold text-emerald-900">{activeLoc ? activeLoc.lng.toFixed(5) : 'Detecting...'}</span>
                 </div>
                 <div>
                   <span className="text-gray-400 block text-[10px]">SPEED</span>
-                  <span className="font-bold text-emerald-900">{activeLoc.speed} km/h</span>
+                  <span className="font-bold text-emerald-900">{activeLoc ? `${activeLoc.speed} km/h` : '-- km/h'}</span>
                 </div>
                 <div>
                   <span className="text-gray-400 block text-[10px]">STATUS</span>
