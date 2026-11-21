@@ -26,6 +26,9 @@ import {
   Stethoscope,
   Award,
   BadgeCheck,
+  X,
+  ExternalLink,
+  ChevronRight,
 } from 'lucide-react';
 
 const AMBULANCE_FLEET = [
@@ -76,14 +79,78 @@ const AMBULANCE_FLEET = [
 ];
 
 const HOSPITALS = [
-  'Dhaka Medical College & Hospital',
-  'Square Hospitals Ltd.',
-  'Evercare Hospital Dhaka',
-  'United Hospital Gulshan',
-  'BIRDEM General Hospital',
-  'Bangabandhu Sheikh Mujib Medical University (BSMMU)',
-  'National Institute of Cardiovascular Diseases (NICVD)',
-  'Kurmitola General Hospital',
+  {
+    name: 'Dhaka Medical College & Hospital',
+    area: 'Secretariate Rd, Shahbagh, Dhaka',
+    phone: '02-55165555',
+    hotline: '01711-234567',
+    emergency: '24/7 Level-1 Trauma, Burn Unit & CCU',
+    beds: 'Available',
+    type: 'Government Super-Specialized',
+  },
+  {
+    name: 'Square Hospitals Ltd.',
+    area: '18/F Panthapath, Dhaka',
+    phone: '10616',
+    hotline: '01713-377775',
+    emergency: '24/7 Emergency, Stroke & Cardiac Center',
+    beds: 'Available',
+    type: 'Private Tertiary Care',
+  },
+  {
+    name: 'Evercare Hospital Dhaka',
+    area: 'Plot 81, Block E, Bashundhara R/A, Dhaka',
+    phone: '10678',
+    hotline: '09666710678',
+    emergency: 'JCI Accredited, 24/7 Critical Care & Trauma',
+    beds: 'Available',
+    type: 'Private Multi-Disciplinary',
+  },
+  {
+    name: 'United Hospital Gulshan',
+    area: 'Plot 15, Road 71, Gulshan 2, Dhaka',
+    phone: '10666',
+    hotline: '01914-001234',
+    emergency: '24/7 Comprehensive Cardiac & ER Care',
+    beds: 'Available',
+    type: 'Private Specialized',
+  },
+  {
+    name: 'BIRDEM General Hospital',
+    area: '122 Kazi Nazrul Islam Ave, Shahbagh, Dhaka',
+    phone: '02-9661551',
+    hotline: '01730-058888',
+    emergency: '24/7 ICU, Nephrology & Emergency Triage',
+    beds: 'Available',
+    type: 'Specialized Endocrine & General',
+  },
+  {
+    name: 'Bangabandhu Sheikh Mujib Medical University (BSMMU)',
+    area: 'Shahbagh, Dhaka',
+    phone: '02-9661051',
+    hotline: '01712-987654',
+    emergency: 'Super-Specialized Research & Emergency ICU',
+    beds: 'Available',
+    type: 'Public Medical University',
+  },
+  {
+    name: 'National Institute of Cardiovascular Diseases (NICVD)',
+    area: 'Sher-e-Bangla Nagar, Dhaka',
+    phone: '02-9122560',
+    hotline: '01715-667788',
+    emergency: 'National Emergency Cardiac Cath-Lab & CCU',
+    beds: 'Available',
+    type: 'National Apex Cardiac Center',
+  },
+  {
+    name: 'Kurmitola General Hospital',
+    area: 'Dhaka-Mymensingh Rd, Dhaka Cantonment',
+    phone: '02-55067201',
+    hotline: '01769-010200',
+    emergency: '24/7 Acute Trauma & General Emergency Care',
+    beds: 'Available',
+    type: 'Government General Hospital',
+  },
 ];
 
 const FAQS = [
@@ -108,6 +175,7 @@ const FAQS = [
 export default function LandingPage() {
   const [scrolled, setScrolled] = useState(false);
   const [openFaq, setOpenFaq] = useState(null);
+  const [selectedHospital, setSelectedHospital] = useState(null);
 
   useEffect(() => {
     const onScroll = () => setScrolled(window.scrollY > 20);
@@ -459,21 +527,130 @@ export default function LandingPage() {
         <span className="text-xs uppercase font-extrabold tracking-widest text-slate-400">
           Hospital Emergency Network
         </span>
-        <h2 className="text-2xl sm:text-3xl font-black text-slate-950 dark:text-white tracking-tight mt-2 mb-8">
+        <h2 className="text-2xl sm:text-3xl font-black text-slate-950 dark:text-white tracking-tight mt-2 mb-2">
           Direct Triage Coordination with Leading Medical Centers
         </h2>
+        <p className="text-xs sm:text-sm text-slate-500 dark:text-slate-400 max-w-xl mx-auto mb-8">
+          যেকোনো হাসপাতালে ক্লিক করে সরাসরি ইমার্জেন্সি হটলাইনে কল দিন অথবা সরাসরি অ্যাম্বুলেন্স বুকিং করুন।
+        </p>
 
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
           {HOSPITALS.map((h) => (
-            <div
-              key={h}
-              className="p-4 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-xs font-bold text-slate-700 dark:text-slate-300 flex items-center justify-center text-center shadow-xs"
+            <button
+              key={h.name}
+              type="button"
+              onClick={() => setSelectedHospital(h)}
+              className="p-4 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 hover:border-rose-500 dark:hover:border-rose-500 hover:shadow-lg transition-all duration-200 text-left flex flex-col justify-between group cursor-pointer active:scale-[0.98]"
             >
-              <Hospital size={16} className="text-rose-600 mr-2 shrink-0" />
-              <span>{h}</span>
-            </div>
+              <div className="flex items-start gap-3 mb-2">
+                <div className="w-9 h-9 rounded-xl bg-rose-50 dark:bg-rose-950/60 text-rose-600 flex items-center justify-center shrink-0 group-hover:bg-rose-600 group-hover:text-white transition-colors">
+                  <Hospital size={18} />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <h3 className="text-xs sm:text-sm font-bold text-slate-900 dark:text-slate-100 group-hover:text-rose-600 dark:group-hover:text-rose-400 transition-colors line-clamp-2">
+                    {h.name}
+                  </h3>
+                  <p className="text-[11px] text-slate-400 truncate mt-0.5">
+                    {h.area}
+                  </p>
+                </div>
+              </div>
+
+              <div className="mt-3 pt-2.5 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between text-[11px]">
+                <span className="text-emerald-600 dark:text-emerald-400 font-semibold flex items-center gap-1">
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                  24/7 Triage Ready
+                </span>
+                <span className="text-rose-600 dark:text-rose-400 font-bold group-hover:translate-x-0.5 transition-transform flex items-center">
+                  বিস্তারিত & বুকিং →
+                </span>
+              </div>
+            </button>
           ))}
         </div>
+
+        {/* Hospital Detail Emergency Modal */}
+        {selectedHospital && (
+          <div
+            className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in duration-200 text-left"
+            onClick={() => setSelectedHospital(null)}
+          >
+            <div
+              className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl max-w-lg w-full p-6 sm:p-8 shadow-2xl relative"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <button
+                type="button"
+                onClick={() => setSelectedHospital(null)}
+                className="absolute top-5 right-5 p-2 rounded-full hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition-colors"
+                title="Close"
+              >
+                <X size={20} />
+              </button>
+
+              <div className="flex items-center gap-3.5 mb-5">
+                <div className="w-12 h-12 rounded-2xl bg-rose-50 dark:bg-rose-950/60 text-rose-600 flex items-center justify-center border border-rose-200 dark:border-rose-900 shrink-0">
+                  <Hospital size={26} />
+                </div>
+                <div>
+                  <span className="text-[10px] font-extrabold uppercase tracking-wider text-rose-700 bg-rose-50 dark:bg-rose-950/80 px-2.5 py-0.5 rounded-full border border-rose-200 dark:border-rose-900">
+                    {selectedHospital.type}
+                  </span>
+                  <h3 className="text-lg sm:text-xl font-black text-slate-900 dark:text-white mt-1 leading-tight">
+                    {selectedHospital.name}
+                  </h3>
+                </div>
+              </div>
+
+              <div className="space-y-3 bg-slate-50 dark:bg-slate-800/50 p-4 rounded-2xl border border-slate-100 dark:border-slate-800 text-xs sm:text-sm">
+                <div className="flex items-start gap-2.5">
+                  <MapPin size={16} className="text-rose-500 shrink-0 mt-0.5" />
+                  <div>
+                    <span className="text-slate-400 text-[11px] block">Location Address</span>
+                    <span className="text-slate-800 dark:text-slate-200 font-medium">{selectedHospital.area}</span>
+                  </div>
+                </div>
+
+                <div className="flex items-start gap-2.5">
+                  <Activity size={16} className="text-emerald-500 shrink-0 mt-0.5" />
+                  <div>
+                    <span className="text-slate-400 text-[11px] block">Emergency Capabilities</span>
+                    <span className="text-emerald-700 dark:text-emerald-400 font-semibold">{selectedHospital.emergency}</span>
+                  </div>
+                </div>
+
+                <div className="flex items-start gap-2.5">
+                  <Phone size={16} className="text-blue-500 shrink-0 mt-0.5" />
+                  <div>
+                    <span className="text-slate-400 text-[11px] block">Emergency Triage Hotline</span>
+                    <span className="font-mono font-bold text-slate-900 dark:text-white text-sm">
+                      {selectedHospital.hotline || selectedHospital.phone}
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Action Buttons in Modal */}
+              <div className="mt-6 grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <Link
+                  href={`/request?destination=${encodeURIComponent(selectedHospital.name)}`}
+                  className="flex items-center justify-center gap-2 py-3 px-4 rounded-xl text-xs sm:text-sm font-bold bg-rose-600 hover:bg-rose-700 text-white shadow-lg shadow-rose-600/30 active:scale-95 transition-all text-center"
+                >
+                  <Ambulance size={16} />
+                  <span>এখানে অ্যাম্বুলেন্স পাঠান</span>
+                </Link>
+
+                <a
+                  href={`tel:${(selectedHospital.hotline || selectedHospital.phone).replace(/[^0-9]/g, '')}`}
+                  className="flex items-center justify-center gap-2 py-3 px-4 rounded-xl text-xs sm:text-sm font-bold bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-800 dark:text-white border border-slate-200 dark:border-slate-700 active:scale-95 transition-all text-center"
+                >
+                  <Phone size={16} className="text-emerald-600" />
+                  <span>সরাসরি হাসপাতালে কল দিন</span>
+                </a>
+              </div>
+            </div>
+          </div>
+        )}
       </section>
 
       {/* ── 24/7 EMERGENCY DIRECT HOTLINES ── */}
