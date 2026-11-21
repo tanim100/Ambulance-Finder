@@ -54,6 +54,9 @@ export default function DriverActivePage() {
   const [activeLoc, setActiveLoc] = useState(null);
   const gpsWatchIdRef = useRef(null);
 
+  // Safe accessor — returns a placeholder when GPS not yet detected
+  const safeActiveLoc = activeLoc || { lat: 23.8103, lng: 90.4125, speed: 0, heading: 0, source: 'Detecting GPS...' };
+
   const [isSimulating, setIsSimulating] = useState(false);
   const [shutterState, setShutterState] = useState('half'); // 'collapsed' | 'half' | 'expanded'
   const touchStartY = useRef(0);
@@ -204,10 +207,11 @@ export default function DriverActivePage() {
     if (isSimulating) {
       simulationTimerRef.current = setInterval(() => {
         setActiveLoc((prev) => {
+          const startLoc = prev || safeActiveLoc;
           const target = trip.userLocation || { lat: 23.8103, lng: 90.4125 };
           const step = 0.0006;
-          const dLat = target.lat - prev.lat;
-          const dLng = target.lng - prev.lng;
+          const dLat = target.lat - startLoc.lat;
+          const dLng = target.lng - startLoc.lng;
           const dist = Math.sqrt(dLat * dLat + dLng * dLng);
 
           if (dist < 0.0004) {
@@ -216,8 +220,8 @@ export default function DriverActivePage() {
           }
 
           return {
-            lat: prev.lat + (dLat / dist) * step,
-            lng: prev.lng + (dLng / dist) * step,
+            lat: startLoc.lat + (dLat / dist) * step,
+            lng: startLoc.lng + (dLng / dist) * step,
             speed: Math.round(35 + Math.random() * 10),
             heading: Math.round((Math.atan2(dLng, dLat) * 180) / Math.PI),
             source: 'Simulated Movement Demo',
@@ -390,7 +394,7 @@ export default function DriverActivePage() {
               <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
               <span className="text-xs text-emerald-600 font-semibold">{trip.status}</span>
               <span className="text-gray-300">•</span>
-              <span className="text-xs font-mono text-gray-500 font-semibold">{activeLoc.speed} km/h</span>
+              <span className="text-xs font-mono text-gray-500 font-semibold">{safeActiveLoc.speed} km/h</span>
             </div>
           </div>
         </div>
@@ -583,7 +587,7 @@ export default function DriverActivePage() {
               <div className="flex items-center justify-between text-[11px] text-gray-600 mb-2">
                 <span>Firebase Path: <strong className="font-mono text-emerald-700">live_tracking/active_trip</strong></span>
                 <span className="text-[10px] bg-emerald-50 text-emerald-700 font-semibold px-2 py-0.5 rounded-full border border-emerald-200">
-                  {activeLoc.source || 'Real Location'}
+                  {safeActiveLoc.source || 'Real Location'}
                 </span>
               </div>
 
