@@ -67,6 +67,17 @@ export default function RequestPage() {
 
   const searchDebounceRef = useRef(null);
 
+  // Pre-fill destination if passed via URL parameter (e.g., from hospital cards)
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search);
+      const dest = params.get('destination') || params.get('hospital');
+      if (dest) {
+        setForm((prev) => ({ ...prev, destination: dest }));
+      }
+    }
+  }, []);
+
   // Reverse geocode coordinates to clean readable address (e.g., "Nikunja 2, Khilkhet, Dhaka")
   const reverseGeocode = useCallback(async (lat, lng) => {
     setGeocodingLoading(true);
