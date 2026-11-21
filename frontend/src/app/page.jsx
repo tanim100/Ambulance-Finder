@@ -37,7 +37,7 @@ const AMBULANCE_FLEET = [
     name: 'Basic Life Support (BLS)',
     category: 'Non-Critical & Minor Trauma',
     eta: '3 - 5 Mins',
-    baseFare: '৳850',
+    baseFare: '৳800',
     color: 'from-blue-500 to-cyan-500',
     tagColor: 'bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-950/40 dark:text-blue-300 dark:border-blue-800',
     description: 'Specialized for stable patients, non-emergency transfers, post-surgery discharges, and orthopedic limb immobilization.',
@@ -48,7 +48,7 @@ const AMBULANCE_FLEET = [
     name: 'Advanced Life Support (ALS)',
     category: 'Cardiac & Severe Respiratory',
     eta: '4 - 6 Mins',
-    baseFare: '৳1,750',
+    baseFare: '৳1,600',
     color: 'from-rose-500 to-amber-500',
     tagColor: 'bg-rose-50 text-rose-700 border-rose-200 dark:bg-rose-950/40 dark:text-rose-300 dark:border-rose-800',
     description: 'Equipped with cardiac defibrillation, IV infusion lines, airway management, and trained paramedics for critical emergencies.',
@@ -70,7 +70,7 @@ const AMBULANCE_FLEET = [
     name: 'Freezing Mortuary Ambulance',
     category: 'Dignified Long-Distance',
     eta: '10 - 15 Mins',
-    baseFare: '৳4,000',
+    baseFare: '৳3,500',
     color: 'from-slate-600 to-slate-800',
     tagColor: 'bg-slate-100 text-slate-700 border-slate-300 dark:bg-slate-800 dark:text-slate-300 dark:border-slate-700',
     description: 'Temperature-controlled mortuary transport preserved between -5°C to -15°C for inter-district respectful journeys.',
@@ -168,7 +168,7 @@ const FAQS = [
   },
   {
     q: 'Can I call if I do not have an internet connection or smartphone?',
-    a: 'Yes. Our direct 24/7 National Emergency Hotline is connected with 999 and our central control room at 16263 and 01614590993 for instant manual dispatch.',
+    a: 'Yes. Our direct 24/7 National Emergency Hotline is connected with 999 and our central control room at 16263 and 01900-HELP99 for instant manual dispatch.',
   },
 ];
 
@@ -225,11 +225,10 @@ export default function LandingPage() {
 
       {/* ── Main Sticky Header ── */}
       <header
-        className={`sticky top-0 z-50 transition-all duration-300 ${
-          scrolled
-            ? 'bg-white/95 dark:bg-slate-900/95 backdrop-blur-md shadow-md border-b border-slate-200 dark:border-slate-800'
-            : 'bg-white/90 dark:bg-slate-900/90 backdrop-blur-sm border-b border-slate-200/80 dark:border-slate-800/80'
-        }`}
+        className={`sticky top-0 z-50 transition-all duration-300 ${scrolled
+          ? 'bg-white/95 dark:bg-slate-900/95 backdrop-blur-md shadow-md border-b border-slate-200 dark:border-slate-800'
+          : 'bg-white/90 dark:bg-slate-900/90 backdrop-blur-sm border-b border-slate-200/80 dark:border-slate-800/80'
+          }`}
       >
         <div className="max-w-7xl mx-auto px-4 sm:px-6 h-18 flex items-center justify-between">
           <Link href="/" className="flex items-center gap-3 group">
@@ -287,7 +286,7 @@ export default function LandingPage() {
 
       {/* ── HERO SECTION ── */}
       <section className="relative overflow-hidden pt-12 pb-20 lg:py-24 border-b border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950">
-        
+
         {/* Soft pink/rose radial ambient glow at top */}
         <div
           className="absolute pointer-events-none"
@@ -378,10 +377,10 @@ export default function LandingPage() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6">
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-8">
             {[
-              { val: '550+', label: 'Registered Ambulances', sub: 'Across 64 districts', icon: Ambulance },
+              { val: '500+', label: 'Registered Ambulances', sub: 'Across 64 districts', icon: Ambulance },
               { val: '< 4.5 Mins', label: 'Average Arrival Time', sub: 'From request to door', icon: Clock },
               { val: '24/7/365', label: 'Continuous Dispatch', sub: 'Active control room', icon: Radio },
-              { val: '20,000+', label: 'Emergency Rescues', sub: '99.4% satisfaction', icon: HeartPulse },
+              { val: '15,000+', label: 'Emergency Rescues', sub: '99.4% satisfaction', icon: HeartPulse },
             ].map(({ val, label, sub, icon: Icon }) => (
               <div key={label} className="flex items-center gap-4">
                 <div className="w-12 h-12 rounded-2xl bg-rose-50 dark:bg-rose-950/60 text-rose-600 dark:text-rose-400 flex items-center justify-center shrink-0 border border-rose-100 dark:border-rose-900">
@@ -413,6 +412,9 @@ export default function LandingPage() {
           <h2 className="text-3xl sm:text-4xl font-black text-slate-950 dark:text-white tracking-tight mt-2">
             Every Emergency Needs The Right Ambulance
           </h2>
+          <p className="text-slate-500 dark:text-slate-400 text-sm sm:text-base mt-3">
+            From basic oxygen support to mobile ICU ventilators, every vehicle is certified by healthcare authorities.
+          </p>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
@@ -531,7 +533,7 @@ export default function LandingPage() {
           Direct Triage Coordination with Leading Medical Centers
         </h2>
         <p className="text-xs sm:text-sm text-slate-500 dark:text-slate-400 max-w-xl mx-auto mb-8">
-          যেকোনো হাসপাতালে ক্লিক করে সরাসরি ইমার্জেন্সি হটলাইনে কল দিন অথবা সরাসরি অ্যাম্বুলেন্স বুকিং করুন।
+          Click any hospital for direct emergency triage hotline and immediate ambulance dispatch.
         </p>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
@@ -562,7 +564,7 @@ export default function LandingPage() {
                   24/7 Triage Ready
                 </span>
                 <span className="text-rose-600 dark:text-rose-400 font-bold group-hover:translate-x-0.5 transition-transform flex items-center">
-                  বিস্তারিত & বুকিং →
+                  Details & Booking →
                 </span>
               </div>
             </button>
@@ -637,7 +639,7 @@ export default function LandingPage() {
                   className="flex items-center justify-center gap-2 py-3 px-4 rounded-xl text-xs sm:text-sm font-bold bg-rose-600 hover:bg-rose-700 text-white shadow-lg shadow-rose-600/30 active:scale-95 transition-all text-center"
                 >
                   <Ambulance size={16} />
-                  <span>এখানে অ্যাম্বুলেন্স পাঠান</span>
+                  <span>Dispatch Ambulance Here</span>
                 </Link>
 
                 <a
@@ -645,7 +647,7 @@ export default function LandingPage() {
                   className="flex items-center justify-center gap-2 py-3 px-4 rounded-xl text-xs sm:text-sm font-bold bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-800 dark:text-white border border-slate-200 dark:border-slate-700 active:scale-95 transition-all text-center"
                 >
                   <Phone size={16} className="text-emerald-600" />
-                  <span>সরাসরি হাসপাতালে কল দিন</span>
+                  <span>Call Hospital ER Directly</span>
                 </a>
               </div>
             </div>
@@ -674,7 +676,7 @@ export default function LandingPage() {
             {[
               { title: 'National Emergency', num: '999', sub: 'Police, Medical & Fire Rescue', col: 'bg-rose-600' },
               { title: 'Govt. Health Line', num: '16263', sub: '24/7 Emergency Medical Advice', col: 'bg-blue-600' },
-              { title: 'AmbulanceFinder Control', num: '01614590993', sub: 'Priority Manual Dispatch Room', col: 'bg-emerald-600' },
+              { title: 'AmbulanceFinder Control', num: '01900-HELP99', sub: 'Priority Manual Dispatch Room', col: 'bg-emerald-600' },
             ].map((c) => (
               <a
                 key={c.num}
