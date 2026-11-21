@@ -263,15 +263,80 @@ export default function DriverActivePage() {
     broadcastLocation(newLoc, trip.status);
   };
 
+  const handleRestartTrip = () => {
+    const initialStatus = 'Accepted';
+    setCompleted(false);
+    setTrip((t) => ({ ...t, status: initialStatus }));
+    broadcastLocation(activeLoc, initialStatus);
+  };
+
   if (completed) {
     return (
-      <div className="min-h-screen bg-gray-50 flex flex-col items-center justify-center p-6 text-center">
-        <div className="text-6xl mb-4">🎉</div>
-        <h2 className="text-2xl font-bold text-gray-900 mb-2">Trip Completed!</h2>
-        <p className="text-gray-500 mb-8">Patient has been transported safely.</p>
-        <Button fullWidth onClick={() => router.push('/dashboard')}>
-          Back to Dashboard
-        </Button>
+      <div className="min-h-screen bg-gray-50 flex flex-col">
+        <Navbar />
+
+        <div className="flex-1 flex items-center justify-center p-4 sm:p-6">
+          <div className="max-w-md w-full bg-white rounded-3xl shadow-xl border border-gray-100 p-6 sm:p-8 text-center animate-in fade-in duration-200">
+            {/* Celebration Icon */}
+            <div className="relative inline-flex items-center justify-center mb-4">
+              <div className="w-20 h-20 bg-emerald-100 rounded-full flex items-center justify-center text-4xl shadow-inner">
+                🎉
+              </div>
+              <span className="absolute -bottom-1 -right-1 bg-emerald-500 text-white p-1.5 rounded-full shadow-md">
+                <CheckCircle2 size={18} />
+              </span>
+            </div>
+
+            <h2 className="text-2xl font-black text-gray-900 tracking-tight">
+              Trip Completed!
+            </h2>
+            <p className="text-sm text-gray-500 mt-1">
+              Patient has been transported safely.
+            </p>
+
+            {/* Trip Details Summary Card */}
+            <div className="mt-6 bg-gray-50 rounded-2xl p-4 text-left border border-gray-100 space-y-2.5 text-xs sm:text-sm">
+              <div className="flex items-center justify-between pb-2 border-b border-gray-200/60">
+                <span className="text-gray-500">Patient:</span>
+                <span className="font-bold text-gray-900">{trip.patientName}</span>
+              </div>
+              <div className="flex items-start justify-between gap-2">
+                <span className="text-gray-500 shrink-0">Pickup:</span>
+                <span className="font-medium text-gray-800 text-right truncate">{trip.pickupLocation}</span>
+              </div>
+              <div className="flex items-start justify-between gap-2">
+                <span className="text-gray-500 shrink-0">Hospital:</span>
+                <span className="font-medium text-emerald-700 text-right truncate font-semibold">
+                  {trip.destination || 'Dhaka Medical College Hospital'}
+                </span>
+              </div>
+              <div className="flex items-center justify-between pt-2 border-t border-gray-200/60">
+                <span className="text-gray-500">Ambulance:</span>
+                <span className="font-mono font-bold text-gray-800">{trip.vehicleNumber}</span>
+              </div>
+            </div>
+
+            {/* Action Buttons */}
+            <div className="mt-6 flex flex-col gap-2.5">
+              <button
+                type="button"
+                onClick={handleRestartTrip}
+                className="w-full py-3 px-4 rounded-xl text-sm font-bold bg-primary-600 hover:bg-primary-700 text-white shadow-lg shadow-primary-200 transition-all active:scale-[0.98] flex items-center justify-center gap-2"
+              >
+                <RefreshCw size={16} />
+                <span>নতুন ট্রিপ শুরু করুন (Reset Trip)</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => router.push('/dashboard')}
+                className="w-full py-2.5 px-4 rounded-xl text-sm font-semibold bg-gray-100 hover:bg-gray-200 text-gray-700 transition-colors"
+              >
+                Back to Dashboard
+              </button>
+            </div>
+          </div>
+        </div>
       </div>
     );
   }
