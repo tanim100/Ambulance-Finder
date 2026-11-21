@@ -324,7 +324,7 @@ export default function DriverActivePage() {
                 className="w-full py-3 px-4 rounded-xl text-sm font-bold bg-primary-600 hover:bg-primary-700 text-white shadow-lg shadow-primary-200 transition-all active:scale-[0.98] flex items-center justify-center gap-2"
               >
                 <RefreshCw size={16} />
-                <span>নতুন ট্রিপ শুরু করুন (Reset Trip)</span>
+                <span>Start New Trip (Reset Trip)</span>
               </button>
 
               <button
@@ -372,17 +372,17 @@ export default function DriverActivePage() {
                 ? 'bg-emerald-50 text-emerald-700 border-emerald-300 hover:bg-emerald-100'
                 : 'bg-rose-50 text-rose-700 border-rose-200 hover:bg-rose-100'
             }`}
-            title="শাটার টগল করুন"
+            title="Toggle Drawer"
           >
             {shutterState === 'collapsed' ? (
               <>
                 <ChevronUp size={15} />
-                <span>শাটার তুলুন</span>
+                <span>Expand Sheet</span>
               </>
             ) : (
               <>
                 <ChevronDown size={15} />
-                <span>শাটার নামান (ম্যাপ বড়)</span>
+                <span>Collapse Sheet (Full Map)</span>
               </>
             )}
           </button>
@@ -418,12 +418,12 @@ export default function DriverActivePage() {
             {shutterState === 'collapsed' ? (
               <>
                 <ChevronUp size={15} className="text-emerald-600" />
-                <span>📋 কার্ড খুলুন</span>
+                <span>📋 Show Sheet</span>
               </>
             ) : (
               <>
                 <Maximize2 size={14} className="text-blue-600" />
-                <span>🗺️ ফুল ম্যাপ (শাটার নামান)</span>
+                <span>🗺️ Full Map (Collapse Sheet)</span>
               </>
             )}
           </button>
@@ -441,7 +441,7 @@ export default function DriverActivePage() {
           </button>
         </div>
 
-        {/* ── Collapsible & Draggable Bottom Sheet / Shutter (শাটার) ── */}
+        {/* ── Collapsible & Draggable Bottom Sheet / Drawer ── */}
         <div
           className={`absolute bottom-0 left-0 right-0 z-20 bg-white rounded-t-3xl shadow-[0_-12px_40px_rgba(0,0,0,0.22)] border-t border-gray-200 flex flex-col transition-all duration-300 ease-out ${
             shutterState === 'collapsed'
@@ -520,7 +520,7 @@ export default function DriverActivePage() {
                   type="button"
                   onClick={() => setShutterState((prev) => (prev === 'collapsed' ? 'half' : 'collapsed'))}
                   className="p-1.5 rounded-xl bg-gray-100 hover:bg-gray-200 text-gray-700 transition-colors"
-                  title={shutterState === 'collapsed' ? 'শাটার তুলুন' : 'শাটার নামান'}
+                  title={shutterState === 'collapsed' ? 'Expand Sheet' : 'Collapse Sheet'}
                 >
                   {shutterState === 'collapsed' ? <ChevronUp size={18} /> : <ChevronDown size={18} />}
                 </button>
