@@ -113,10 +113,10 @@ export default function MapView({
   className = '',
   height = '100%',
 }) {
-  // Ensure we always have coordinates to show for user position
-  const effectiveUserLoc = userLocation && typeof userLocation.lat === 'number'
+  // Only show user pin when explicitly provided — do NOT fall back to center
+  const effectiveUserLoc = userLocation && typeof userLocation.lat === 'number' && typeof userLocation.lng === 'number'
     ? userLocation
-    : { lat: center[0] || 23.8103, lng: center[1] || 90.4125 };
+    : null;
 
   return (
     <div className={`relative rounded-2xl overflow-hidden ${className}`} style={{ height, width: '100%' }}>
@@ -143,7 +143,7 @@ export default function MapView({
         <MapRecenter center={center} zoom={zoom} />
         {onLocationSelect && <MapClickHandler onLocationSelect={onLocationSelect} />}
 
-        {/* User Current Location Marker */}
+        {/* User / Patient Pickup Location Marker */}
         {effectiveUserLoc && (
           <Marker
             position={[effectiveUserLoc.lat, effectiveUserLoc.lng]}
@@ -151,13 +151,10 @@ export default function MapView({
           >
             <Popup>
               <div className="text-center p-1">
-                <p className="font-bold text-sm text-blue-600">📍 Current Location</p>
+                <p className="font-bold text-sm text-blue-600">📍 {effectiveUserLoc.label || 'Patient Pickup'}</p>
                 <p className="text-xs text-gray-500 font-mono mt-0.5">
                   {effectiveUserLoc.lat.toFixed(4)}, {effectiveUserLoc.lng.toFixed(4)}
                 </p>
-                {effectiveUserLoc.label && (
-                  <p className="text-[11px] text-gray-400 mt-0.5">{effectiveUserLoc.label}</p>
-                )}
               </div>
             </Popup>
           </Marker>
