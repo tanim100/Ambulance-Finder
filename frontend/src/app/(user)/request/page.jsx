@@ -365,9 +365,9 @@ export default function RequestPage() {
     } catch {}
   };
 
-  // High-accuracy live device GPS
+  // High-accuracy live device GPS with fallback to WiFi/Network
   const handleDetectLiveGPS = () => {
-    if (navigator.geolocation) {
+    if (navigator?.geolocation) {
       setGeocodingLoading(true);
       navigator.geolocation.getCurrentPosition(
         (pos) => {
@@ -375,15 +375,43 @@ export default function RequestPage() {
           const lng = pos.coords.longitude;
           setPickupCoords({ lat, lng });
           reverseGeocode(lat, lng);
+          // Immediately sync with Firebase live_tracking/user and active_trip
+          updatePatientLocation('active_trip', {
+            lat,
+            lng,
+            address: form.pickupLocation || 'Live GPS Location',
+          });
           try {
             localStorage.setItem('user_last_location', JSON.stringify({ lat, lng, label: 'Your Exact GPS Location' }));
           } catch {}
-        },
-        () => {
-          getLocation();
           setGeocodingLoading(false);
         },
-        { enableHighAccuracy: true, timeout: 8000 }
+        (err) => {
+          // Low accuracy network/WiFi fallback
+          navigator.geolocation.getCurrentPosition(
+            (pos) => {
+              const lat = pos.coords.latitude;
+              const lng = pos.coords.longitude;
+              setPickupCoords({ lat, lng });
+              reverseGeocode(lat, lng);
+              updatePatientLocation('active_trip', {
+                lat,
+                lng,
+                address: form.pickupLocation || 'Network Location',
+              });
+              try {
+                localStorage.setItem('user_last_location', JSON.stringify({ lat, lng, label: 'Network Location' }));
+              } catch {}
+              setGeocodingLoading(false);
+            },
+            () => {
+              getLocation();
+              setGeocodingLoading(false);
+            },
+            { enableHighAccuracy: false, timeout: 8000, maximumAge: 0 }
+          );
+        },
+        { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
       );
     } else {
       getLocation();
@@ -394,6 +422,11 @@ export default function RequestPage() {
   const handleMapPin = (coords) => {
     setPickupCoords(coords);
     reverseGeocode(coords.lat, coords.lng);
+    updatePatientLocation('active_trip', {
+      lat: coords.lat,
+      lng: coords.lng,
+      address: 'Pinned on Map',
+    });
   };
 
   const validate = () => {

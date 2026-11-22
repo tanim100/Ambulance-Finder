@@ -6,7 +6,7 @@ import dynamic from 'next/dynamic';
 import Link from 'next/link';
 import { bookingAPI } from '@/lib/api';
 import io from 'socket.io-client';
-import { subscribeToAmbulanceLocation } from '@/lib/firebaseTracking';
+import { subscribeToAmbulanceLocation, updatePatientLocation } from '@/lib/firebaseTracking';
 
 // Leaflet map — no SSR
 const MapComponent = dynamic(() => import('@/components/map/MapComponent'), { ssr: false });
@@ -82,6 +82,7 @@ export default function TrackingPage() {
       getUserCurrentLocation().then((loc) => {
         if (loc) {
           setUserCurrentPos(loc);
+          updatePatientLocation(id || 'active_trip', { lat: loc.lat, lng: loc.lng, address: 'Live User GPS' });
           try { localStorage.setItem('user_last_location', JSON.stringify(loc)); } catch {}
         }
       });
@@ -91,6 +92,7 @@ export default function TrackingPage() {
         (pos) => {
           const loc = { lat: pos.coords.latitude, lng: pos.coords.longitude };
           setUserCurrentPos(loc);
+          updatePatientLocation(id || 'active_trip', { lat: loc.lat, lng: loc.lng, address: 'Live User GPS' });
           try { localStorage.setItem('user_last_location', JSON.stringify(loc)); } catch {}
         },
         () => {},

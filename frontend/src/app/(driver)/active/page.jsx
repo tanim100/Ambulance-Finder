@@ -61,6 +61,8 @@ export default function DriverActivePage() {
   });
 
   const [isSimulating, setIsSimulating] = useState(false);
+  const [hasRealGPS, setHasRealGPS] = useState(false); // only true once we get real device GPS
+  const [gpsError, setGpsError] = useState(null);
   const [shutterState, setShutterState] = useState('half'); // 'collapsed' | 'half' | 'expanded'
   const touchStartY = useRef(0);
   const [firebaseStatus, setFirebaseStatus] = useState({
@@ -98,7 +100,10 @@ export default function DriverActivePage() {
             heading: pos.coords.heading || 0,
             source: 'Device GPS (High Accuracy)',
           };
+          setHasRealGPS(true);
+          setGpsError(null);
           setActiveLoc(loc);
+          broadcastLocation(loc, trip.status, true);
           try { localStorage.setItem('driver_last_location', JSON.stringify(loc)); } catch {}
         },
         () => {
@@ -112,7 +117,10 @@ export default function DriverActivePage() {
                 heading: 0,
                 source: 'Device Location (Network)',
               };
+              setHasRealGPS(true);
+              setGpsError(null);
               setActiveLoc(loc);
+              broadcastLocation(loc, trip.status, true);
               try { localStorage.setItem('driver_last_location', JSON.stringify(loc)); } catch {}
             },
             () => {
@@ -121,7 +129,10 @@ export default function DriverActivePage() {
                 const saved = localStorage.getItem('driver_last_location');
                 if (saved) {
                   const p = JSON.parse(saved);
-                  if (p?.lat && p?.lng) setActiveLoc({ ...p, source: 'Last Known GPS' });
+                  if (p?.lat && p?.lng) {
+                    setActiveLoc({ ...p, source: 'Last Known GPS' });
+                    setHasRealGPS(true);
+                  }
                 }
               } catch {}
             },
@@ -142,7 +153,10 @@ export default function DriverActivePage() {
               heading: pos.coords.heading || 0,
               source: 'Live Device GPS',
             };
+            setHasRealGPS(true);
+            setGpsError(null);
             setActiveLoc(loc);
+            broadcastLocation(loc, trip.status, true);
             try { localStorage.setItem('driver_last_location', JSON.stringify(loc)); } catch {}
           }
         },
@@ -193,8 +207,13 @@ export default function DriverActivePage() {
   }, [geoLoc, isSimulating]);
 
   // Core function to broadcast real location to Firebase & Socket
-  const broadcastLocation = useCallback(async (coords = activeLoc, currentStatus = trip.status) => {
+  const broadcastLocation = useCallback(async (coords = activeLoc, currentStatus = trip.status, force = false) => {
     if (!coords || typeof coords.lat !== 'number' || typeof coords.lng !== 'number') return;
+
+    // Do NOT broadcast default mock coordinates unless real GPS has arrived or user simulated/pinned
+    if (!force && !hasRealGPS && !isSimulating && coords.source?.startsWith('Default')) {
+      return;
+    }
 
     // 1. Socket emit
     emitDriverLocation(coords.lat, coords.lng);
@@ -204,12 +223,12 @@ export default function DriverActivePage() {
       const res = await updateAmbulanceLocation(trip._id, {
         lat: coords.lat,
         lng: coords.lng,
-        speed: coords.speed || 35,
+        speed: coords.speed || 0,
         heading: coords.heading || 0,
         status: currentStatus,
         driverName: 'Assigned Driver',
         vehicleNumber: trip.vehicleNumber || 'DHA-AMB-4421',
-        source: coords.source || 'Real Live Device Network/GPS',
+        source: coords.source || 'Live Device GPS',
       });
 
       setFirebaseStatus({
@@ -222,21 +241,25 @@ export default function DriverActivePage() {
       console.error('Firebase upload error:', err);
       setFirebaseStatus((prev) => ({ ...prev, error: err.message }));
     }
-  }, [activeLoc, trip._id, trip.status, trip.vehicleNumber]);
+  }, [activeLoc, hasRealGPS, isSimulating, trip._id, trip.status, trip.vehicleNumber]);
 
-  // Push to Firebase on activeLoc or status change
+  // Push to Firebase on activeLoc or status change (only when real GPS or simulating)
   useEffect(() => {
-    broadcastLocation(activeLoc, trip.status);
-  }, [activeLoc, trip.status, broadcastLocation]);
-
-  // Continuous background sync every 3 seconds
-  useEffect(() => {
-    autoUploadTimerRef.current = setInterval(() => {
+    if (hasRealGPS || isSimulating || !activeLoc.source?.startsWith('Default')) {
       broadcastLocation(activeLoc, trip.status);
-    }, 3000);
+    }
+  }, [activeLoc, trip.status, hasRealGPS, isSimulating, broadcastLocation]);
+
+  // Continuous background sync every 3 seconds (only when real GPS or simulating)
+  useEffect(() => {
+    if (hasRealGPS || isSimulating || !activeLoc.source?.startsWith('Default')) {
+      autoUploadTimerRef.current = setInterval(() => {
+        broadcastLocation(activeLoc, trip.status);
+      }, 3000);
+    }
 
     return () => clearInterval(autoUploadTimerRef.current);
-  }, [activeLoc, trip.status, broadcastLocation]);
+  }, [activeLoc, trip.status, hasRealGPS, isSimulating, broadcastLocation]);
 
   // Simulated GPS movement loop towards the patient
   useEffect(() => {
@@ -299,6 +322,7 @@ export default function DriverActivePage() {
   // Force get live device GPS
   const handleGetRealDeviceGPS = () => {
     setIsSimulating(false);
+    setGpsError(null);
     if (navigator.geolocation) {
       navigator.geolocation.getCurrentPosition(
         (pos) => {
@@ -309,8 +333,10 @@ export default function DriverActivePage() {
             heading: pos.coords.heading || 0,
             source: 'Device Hardware GPS (High Accuracy)',
           };
+          setHasRealGPS(true);
+          setGpsError(null);
           setActiveLoc(newLoc);
-          broadcastLocation(newLoc, trip.status);
+          broadcastLocation(newLoc, trip.status, true);
           try { localStorage.setItem('driver_last_location', JSON.stringify(newLoc)); } catch {}
         },
         (err) => {
@@ -324,18 +350,26 @@ export default function DriverActivePage() {
                 heading: 0,
                 source: 'Device Location (Network/WiFi)',
               };
+              setHasRealGPS(true);
+              setGpsError(null);
               setActiveLoc(newLoc);
-              broadcastLocation(newLoc, trip.status);
+              broadcastLocation(newLoc, trip.status, true);
               try { localStorage.setItem('driver_last_location', JSON.stringify(newLoc)); } catch {}
             },
-            () => { getLocation(); },
+            (fallbackErr) => {
+              let msg = 'Could not get device GPS. Click on the map to set your real location.';
+              if (err.code === 1 || fallbackErr.code === 1) {
+                msg = '🔒 Browser location permission denied. Click the lock icon in your browser address bar to allow location.';
+              }
+              setGpsError(msg);
+            },
             { enableHighAccuracy: false, timeout: 8000, maximumAge: 0 }
           );
         },
         { enableHighAccuracy: true, timeout: 12000, maximumAge: 0 }
       );
     } else {
-      getLocation();
+      setGpsError('Geolocation is not supported in this browser.');
     }
   };
 
@@ -348,8 +382,10 @@ export default function DriverActivePage() {
       heading: 0,
       source: 'Pinned Manually on Map',
     };
+    setHasRealGPS(true);
+    setGpsError(null);
     setActiveLoc(newLoc);
-    broadcastLocation(newLoc, trip.status);
+    broadcastLocation(newLoc, trip.status, true);
   };
 
   const handleRestartTrip = () => {
@@ -635,6 +671,44 @@ export default function DriverActivePage() {
                   {firebaseStatus.lastSyncTime ? `Uploaded: ${firebaseStatus.lastSyncTime}` : 'Connecting...'}
                 </span>
               </div>
+
+              {/* Real GPS status banner */}
+              {gpsError && (
+                <div className="mb-2.5 p-2 rounded-xl bg-rose-50 border border-rose-200 text-xs text-rose-700 flex items-center justify-between gap-2">
+                  <span>{gpsError}</span>
+                  <button
+                    type="button"
+                    onClick={handleGetRealDeviceGPS}
+                    className="shrink-0 px-2 py-1 bg-rose-600 hover:bg-rose-700 text-white rounded-lg text-[11px] font-bold"
+                  >
+                    Retry GPS
+                  </button>
+                </div>
+              )}
+
+              {!hasRealGPS && !isSimulating && !gpsError && (
+                <div className="mb-2.5 p-2 rounded-xl bg-amber-50 border border-amber-200 text-xs text-amber-800 flex items-center justify-between gap-2">
+                  <span>📡 Waiting for device GPS. Click button or tap map to pin:</span>
+                  <button
+                    type="button"
+                    onClick={handleGetRealDeviceGPS}
+                    className="shrink-0 px-2.5 py-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-[11px] font-bold flex items-center gap-1"
+                  >
+                    📍 Detect GPS
+                  </button>
+                </div>
+              )}
+
+              {hasRealGPS && (
+                <div className="mb-2.5 p-2 rounded-xl bg-emerald-50 border border-emerald-200 text-xs text-emerald-800 flex items-center justify-between gap-2">
+                  <span className="font-semibold flex items-center gap-1">
+                    🛰️ Live Real GPS streaming to Firebase ({activeLoc.source})
+                  </span>
+                  <span className="font-mono font-bold text-emerald-900">
+                    {activeLoc.lat.toFixed(5)}, {activeLoc.lng.toFixed(5)}
+                  </span>
+                </div>
+              )}
 
               <div className="flex items-center justify-between text-[11px] text-gray-600 mb-2">
                 <span>Firebase Path: <strong className="font-mono text-emerald-700">live_tracking/active_trip</strong></span>
