@@ -12,7 +12,15 @@ import Card from '@/components/ui/Card';
 import { driverAPI } from '@/lib/api';
 import { useGeolocation } from '@/hooks/useGeolocation';
 import { emitDriverLocation } from '@/lib/socket';
-import { updateAmbulanceLocation, testFirebaseConnection, subscribeToDestinationHospital } from '@/lib/firebaseTracking';
+import {
+  updateAmbulanceLocation,
+  testFirebaseConnection,
+  subscribeToDestinationHospital,
+  subscribeToRequest,
+  subscribeToUserLiveLocation,
+  updateDriverLiveLocation,
+  completeOrCancelTrip,
+} from '@/lib/firebaseTracking';
 import { rtdb } from '@/lib/firebase';
 import { ref, onValue, off } from 'firebase/database';
 
@@ -179,38 +187,51 @@ export default function DriverActivePage() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Listen to patient exact location from Firebase
+  // Listen to patient request and live patient location from Firebase
   useEffect(() => {
-    if (!rtdb) return;
-    try {
-      const patientRef = ref(rtdb, 'live_tracking/active_trip/patient');
-      const unsub = onValue(patientRef, (snap) => {
-        const val = snap.val();
-        if (val && typeof val.patientLat === 'number' && typeof val.patientLng === 'number') {
-          setTrip((prev) => ({
-            ...prev,
-            userLocation: { lat: val.patientLat, lng: val.patientLng },
-            pickupLocation: val.pickupAddress || prev.pickupLocation,
-          }));
-        }
-      });
+    // 1. Listen to request details (patient details, emergency type, destination)
+    const unsubRequest = subscribeToRequest(tripIdParam, (reqData) => {
+      if (reqData) {
+        setTrip((prev) => ({
+          ...prev,
+          patientName: reqData.patientDetails?.name || reqData.patientName || prev.patientName,
+          userPhone: reqData.patientDetails?.phone || reqData.userPhone || prev.userPhone,
+          emergencyType: reqData.patientDetails?.emergencyType || reqData.emergencyType || prev.emergencyType,
+          pickupLocation: reqData.pickup?.address || reqData.pickupLocation || prev.pickupLocation,
+          destination: reqData.destination?.name || prev.destination,
+          destinationHospital: reqData.destination || prev.destinationHospital,
+          status: reqData.status === 'accepted' ? 'Accepted' : reqData.status || prev.status,
+          userLocation: reqData.pickup ? { lat: reqData.pickup.lat, lng: reqData.pickup.lng } : prev.userLocation,
+        }));
+      }
+    });
 
-      // Also listen to destination hospital updates from Firebase
-      const unsubHospital = subscribeToDestinationHospital(tripIdParam, (hospital) => {
-        if (hospital && hospital.name) {
-          setTrip((prev) => ({
-            ...prev,
-            destination: hospital.name,
-            destinationHospital: hospital,
-          }));
-        }
-      });
+    // 2. Listen to patient live GPS location from locations/{requestId}/user
+    const unsubUserLoc = subscribeToUserLiveLocation(tripIdParam, (userLoc) => {
+      if (userLoc && typeof userLoc.lat === 'number' && typeof userLoc.lng === 'number') {
+        setTrip((prev) => ({
+          ...prev,
+          userLocation: { lat: userLoc.lat, lng: userLoc.lng },
+        }));
+      }
+    });
 
-      return () => {
-        off(patientRef);
-        unsubHospital?.();
-      };
-    } catch {}
+    // 3. Listen to destination hospital updates
+    const unsubHospital = subscribeToDestinationHospital(tripIdParam, (hospital) => {
+      if (hospital && hospital.name) {
+        setTrip((prev) => ({
+          ...prev,
+          destination: hospital.name,
+          destinationHospital: hospital,
+        }));
+      }
+    });
+
+    return () => {
+      unsubRequest?.();
+      unsubUserLoc?.();
+      unsubHospital?.();
+    };
   }, [tripIdParam]);
 
   // Update activeLoc whenever device hardware GPS or location arrives
@@ -239,9 +260,17 @@ export default function DriverActivePage() {
     // 1. Socket emit
     emitDriverLocation(coords.lat, coords.lng);
 
-    // 2. Real-time Firebase upload
+    // 2. Real-time Firebase upload: Roadmap Step 5 (locations/{requestId}/driver)
     try {
-      const res = await updateAmbulanceLocation(trip._id, {
+      await updateDriverLiveLocation(tripIdParam, {
+        lat: coords.lat,
+        lng: coords.lng,
+        speed: coords.speed || 0,
+        heading: coords.heading || 0,
+        status: currentStatus,
+      });
+
+      const res = await updateAmbulanceLocation(tripIdParam, {
         lat: coords.lat,
         lng: coords.lng,
         speed: coords.speed || 0,
@@ -262,7 +291,7 @@ export default function DriverActivePage() {
       console.error('Firebase upload error:', err);
       setFirebaseStatus((prev) => ({ ...prev, error: err.message }));
     }
-  }, [activeLoc, hasRealGPS, isSimulating, trip._id, trip.status, trip.vehicleNumber]);
+  }, [activeLoc, hasRealGPS, isSimulating, tripIdParam, trip.status, trip.vehicleNumber]);
 
   // Push to Firebase on activeLoc or status change (only when real GPS or simulating)
   useEffect(() => {
@@ -323,14 +352,18 @@ export default function DriverActivePage() {
     const nextStatus = TRIP_STATUSES[currentIdx + 1];
     setUpdating(true);
     try {
-      await driverAPI.updateBookingStatus(trip._id, nextStatus);
+      await driverAPI.updateBookingStatus(tripIdParam, nextStatus);
     } catch {}
     setTrip((t) => ({ ...t, status: nextStatus }));
 
     // Update Firebase immediately
     broadcastLocation(activeLoc, nextStatus);
 
-    if (nextStatus === 'Completed') setCompleted(true);
+    if (nextStatus === 'Completed') {
+      setCompleted(true);
+      // Roadmap Step 7: Stop sharing and clean up locations/{requestId}
+      completeOrCancelTrip(tripIdParam, 'completed');
+    }
     setUpdating(false);
   };
 
@@ -550,6 +583,7 @@ export default function DriverActivePage() {
             userLocation={trip.userLocation}
             driverLocation={activeLoc}
             hospitalLocation={trip.destinationHospital ? { lat: trip.destinationHospital.lat, lng: trip.destinationHospital.lng, name: trip.destinationHospital.name } : null}
+            phaseKey={trip.status}
             onLocationSelect={handleMapClick}
             route={
               trip.status === 'Heading to Hospital' && trip.destinationHospital

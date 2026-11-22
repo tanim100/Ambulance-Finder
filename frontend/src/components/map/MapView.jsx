@@ -1,6 +1,6 @@
 'use client';
 // src/components/map/MapView.jsx
-// Interactive Leaflet map with Live Current Location Pin, Ambulance Markers, Destination Hospital & Navigation Route
+// Smooth, Jitter-Free Leaflet Map with Stable Singletons, Smooth Interpolation & Dual-Layer Road Routing
 
 import { useEffect, useRef } from 'react';
 import { MapContainer, TileLayer, Marker, Popup, useMap, Polyline, useMapEvents } from 'react-leaflet';
@@ -15,141 +15,149 @@ L.Icon.Default.mergeOptions({
   shadowUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png',
 });
 
-// Custom red ambulance icon with pulse
-export const createAmbulanceIcon = (status = 'En Route') =>
-  L.divIcon({
-    className: 'custom-ambulance-icon',
-    html: `<div style="
-      position: relative;
-      background: #DC2626;
-      border: 3px solid white;
-      border-radius: 50%;
-      width: 44px;
-      height: 44px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      font-size: 22px;
-      box-shadow: 0 4px 14px rgba(220,38,38,0.55);
-      cursor: pointer;
-      animation: pulse-ring 2s infinite ease-out;
-    ">
-      🚑
-      <span style="
-        position: absolute;
-        top: -2px;
-        right: -2px;
-        width: 12px;
-        height: 12px;
-        background: #10B981;
-        border: 2px solid white;
-        border-radius: 50%;
-      "></span>
-    </div>`,
-    iconSize: [44, 44],
-    iconAnchor: [22, 22],
-    popupAnchor: [0, -22],
-  });
-
-// High-visibility pulsing Current Location User Icon
-export const createUserIcon = () =>
-  L.divIcon({
-    className: 'custom-user-icon',
-    html: `<div style="position: relative; width: 36px; height: 36px; display: flex; align-items: center; justify-content: center;">
-      <div style="
-        position: absolute;
-        width: 36px;
-        height: 36px;
-        background: rgba(37, 99, 235, 0.35);
-        border-radius: 50%;
-        animation: leaflet-pulse 2s infinite ease-out;
-      "></div>
-      <div style="
+// ── Static Cached Icons (Created ONCE so React never recreates DOM nodes) ──
+let cachedAmbulanceIcon = null;
+export const createAmbulanceIcon = (status = 'En Route') => {
+  if (typeof window === 'undefined') return null;
+  if (!cachedAmbulanceIcon) {
+    cachedAmbulanceIcon = L.divIcon({
+      className: 'custom-ambulance-icon',
+      html: `<div style="
         position: relative;
-        background: #2563EB;
+        background: #DC2626;
         border: 3px solid white;
         border-radius: 50%;
-        width: 20px;
-        height: 20px;
-        box-shadow: 0 2px 10px rgba(37,99,235,0.7);
-      "></div>
-    </div>`,
-    iconSize: [36, 36],
-    iconAnchor: [18, 18],
-    popupAnchor: [0, -18],
-  });
+        width: 44px;
+        height: 44px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 22px;
+        box-shadow: 0 4px 14px rgba(220,38,38,0.55);
+        cursor: pointer;
+      ">
+        🚑
+        <span style="
+          position: absolute;
+          top: -2px;
+          right: -2px;
+          width: 12px;
+          height: 12px;
+          background: #10B981;
+          border: 2px solid white;
+          border-radius: 50%;
+        "></span>
+      </div>`,
+      iconSize: [44, 44],
+      iconAnchor: [22, 22],
+      popupAnchor: [0, -22],
+    });
+  }
+  return cachedAmbulanceIcon;
+};
 
-// Destination Hospital Icon (Emerald Green with Hospital Pulse)
-export const createHospitalIcon = () =>
-  L.divIcon({
-    className: 'custom-hospital-icon',
-    html: `<div style="
-      position: relative;
-      background: #059669;
-      border: 3px solid white;
-      border-radius: 50%;
-      width: 44px;
-      height: 44px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      font-size: 22px;
-      box-shadow: 0 4px 14px rgba(5,150,105,0.6);
-      cursor: pointer;
-      animation: hospital-pulse 2s infinite ease-out;
-    ">
-      🏥
-      <span style="
-        position: absolute;
-        top: -2px;
-        right: -2px;
-        width: 12px;
-        height: 12px;
-        background: #EF4444;
-        border: 2px solid white;
+let cachedUserIcon = null;
+export const createUserIcon = () => {
+  if (typeof window === 'undefined') return null;
+  if (!cachedUserIcon) {
+    cachedUserIcon = L.divIcon({
+      className: 'custom-user-icon',
+      html: `<div style="position: relative; width: 36px; height: 36px; display: flex; align-items: center; justify-content: center;">
+        <div style="
+          position: absolute;
+          width: 36px;
+          height: 36px;
+          background: rgba(37, 99, 235, 0.35);
+          border-radius: 50%;
+        "></div>
+        <div style="
+          position: relative;
+          background: #2563EB;
+          border: 3px solid white;
+          border-radius: 50%;
+          width: 20px;
+          height: 20px;
+          box-shadow: 0 2px 10px rgba(37,99,235,0.7);
+        "></div>
+      </div>`,
+      iconSize: [36, 36],
+      iconAnchor: [18, 18],
+      popupAnchor: [0, -18],
+    });
+  }
+  return cachedUserIcon;
+};
+
+let cachedHospitalIcon = null;
+export const createHospitalIcon = () => {
+  if (typeof window === 'undefined') return null;
+  if (!cachedHospitalIcon) {
+    cachedHospitalIcon = L.divIcon({
+      className: 'custom-hospital-icon',
+      html: `<div style="
+        position: relative;
+        background: #059669;
+        border: 3px solid white;
         border-radius: 50%;
-      "></span>
-    </div>`,
-    iconSize: [44, 44],
-    iconAnchor: [22, 22],
-    popupAnchor: [0, -22],
-  });
+        width: 44px;
+        height: 44px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 22px;
+        box-shadow: 0 4px 14px rgba(5,150,105,0.6);
+        cursor: pointer;
+      ">
+        🏥
+        <span style="
+          position: absolute;
+          top: -2px;
+          right: -2px;
+          width: 12px;
+          height: 12px;
+          background: #EF4444;
+          border: 2px solid white;
+          border-radius: 50%;
+        "></span>
+      </div>`,
+      iconSize: [44, 44],
+      iconAnchor: [22, 22],
+      popupAnchor: [0, -22],
+    });
+  }
+  return cachedHospitalIcon;
+};
 
-// Auto-fit bounds to encompass user, driver, and destination hospital
-function MapFitBounds({ userLocation, driverLocation, hospitalLocation }) {
+// ── Smart Bounds Fitter (Fits camera ONCE per phase or hospital switch, NEVER on micro GPS ticks) ──
+function MapFitBounds({ userLocation, driverLocation, hospitalLocation, phaseKey }) {
   const map = useMap();
-  const hasFitted = useRef(false);
+  const lastKeyRef = useRef('');
 
   useEffect(() => {
+    const key = `${phaseKey || 'def'}_${hospitalLocation?.name || 'none'}_${Boolean(userLocation)}_${Boolean(driverLocation)}`;
+    if (lastKeyRef.current === key) return;
+
     const validPoints = [];
     if (userLocation?.lat && userLocation?.lng) validPoints.push([userLocation.lat, userLocation.lng]);
     if (driverLocation?.lat && driverLocation?.lng) validPoints.push([driverLocation.lat, driverLocation.lng]);
     if (hospitalLocation?.lat && hospitalLocation?.lng) validPoints.push([hospitalLocation.lat, hospitalLocation.lng]);
 
-    if (validPoints.length >= 2 && !hasFitted.current) {
+    if (validPoints.length >= 2) {
       try {
         const bounds = L.latLngBounds(validPoints);
-        map.fitBounds(bounds, { padding: [55, 55], maxZoom: 16 });
-        hasFitted.current = true;
+        map.fitBounds(bounds, { padding: [50, 50], maxZoom: 15, animate: true, duration: 0.6 });
+        lastKeyRef.current = key;
       } catch {}
+    } else if (validPoints.length === 1 && !lastKeyRef.current) {
+      map.setView(validPoints[0], 15, { animate: false });
+      lastKeyRef.current = key;
     }
-  }, [userLocation?.lat, userLocation?.lng, driverLocation?.lat, driverLocation?.lng, hospitalLocation?.lat, hospitalLocation?.lng, map]);
+  }, [userLocation, driverLocation, hospitalLocation, phaseKey, map]);
 
   return null;
 }
 
-// Auto-recenter when center prop changes
-function MapRecenter({ center, zoom }) {
-  const map = useMap();
-  useEffect(() => {
-    if (center && Array.isArray(center) && center[0] && center[1]) {
-      map.flyTo(center, zoom || map.getZoom() || 15, { duration: 0.8 });
-    }
-  }, [center, zoom, map]);
-  return null;
-}
-
-// Map Click Listener to pick location
+// ── Map Click Listener to pick location ──
 function MapClickHandler({ onLocationSelect }) {
   useMapEvents({
     click(e) {
@@ -169,6 +177,7 @@ export default function MapView({
   driverLocation = null,
   hospitalLocation = null,
   route = null,
+  phaseKey = '',
   onAmbulanceClick = null,
   onLocationSelect = null,
   className = '',
@@ -178,24 +187,17 @@ export default function MapView({
     ? userLocation
     : null;
 
+  const ambIcon = createAmbulanceIcon();
+  const userIcon = createUserIcon();
+  const hospIcon = createHospitalIcon();
+
   return (
     <div className={`relative rounded-2xl overflow-hidden ${className}`} style={{ height, width: '100%' }}>
-      {/* Global CSS for pulsing markers */}
+      {/* Global CSS for zero-jitter smooth marker gliding */}
       <style jsx global>{`
-        @keyframes leaflet-pulse {
-          0% { transform: scale(0.6); opacity: 0.9; }
-          70% { transform: scale(1.6); opacity: 0; }
-          100% { transform: scale(1.6); opacity: 0; }
-        }
-        @keyframes pulse-ring {
-          0% { box-shadow: 0 0 0 0 rgba(220, 38, 38, 0.6); }
-          70% { box-shadow: 0 0 0 12px rgba(220, 38, 38, 0); }
-          100% { box-shadow: 0 0 0 0 rgba(220, 38, 38, 0); }
-        }
-        @keyframes hospital-pulse {
-          0% { box-shadow: 0 0 0 0 rgba(5, 150, 105, 0.6); }
-          70% { box-shadow: 0 0 0 14px rgba(5, 150, 105, 0); }
-          100% { box-shadow: 0 0 0 0 rgba(5, 150, 105, 0); }
+        .leaflet-marker-icon {
+          transition: transform 0.6s linear !important;
+          will-change: transform;
         }
       `}</style>
 
@@ -210,32 +212,41 @@ export default function MapView({
           url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
           attribution='&copy; OpenStreetMap contributors'
         />
-        <MapRecenter center={center} zoom={zoom} />
-        <MapFitBounds userLocation={effectiveUserLoc} driverLocation={driverLocation} hospitalLocation={hospitalLocation} />
+
+        {/* Fits bounds smoothly when phase/hospital changes, completely silent during GPS movement */}
+        <MapFitBounds
+          userLocation={effectiveUserLoc}
+          driverLocation={driverLocation}
+          hospitalLocation={hospitalLocation}
+          phaseKey={phaseKey}
+        />
+
         {onLocationSelect && <MapClickHandler onLocationSelect={onLocationSelect} />}
 
-        {/* Route polyline — dual layer (glow + navigation path) */}
+        {/* Route polyline — dual layer (glow + high-visibility dashed road navigation) */}
         {route && route.length > 1 && (
           <>
-            {/* Outer Route Glow */}
+            {/* Outer Route Glow Layer */}
             <Polyline
+              key={`glow-${route.length}-${route[0]?.[0]?.toFixed?.(3)}`}
               positions={route}
               pathOptions={{
                 color: '#2563EB',
-                weight: 7,
-                opacity: 0.35,
+                weight: 8,
+                opacity: 0.45,
                 lineCap: 'round',
                 lineJoin: 'round',
               }}
             />
-            {/* Inner Dashed Road Navigation Path */}
+            {/* Inner High-Visibility Road Direction Layer */}
             <Polyline
+              key={`nav-${route.length}-${route[0]?.[0]?.toFixed?.(3)}`}
               positions={route}
               pathOptions={{
                 color: '#DC2626',
-                weight: 4,
+                weight: 5,
                 opacity: 0.95,
-                dashArray: '8, 8',
+                dashArray: '10, 8',
                 lineCap: 'round',
                 lineJoin: 'round',
               }}
@@ -247,7 +258,7 @@ export default function MapView({
         {effectiveUserLoc && (
           <Marker
             position={[effectiveUserLoc.lat, effectiveUserLoc.lng]}
-            icon={createUserIcon()}
+            icon={userIcon}
           >
             <Popup>
               <div className="text-center p-1">
@@ -264,7 +275,7 @@ export default function MapView({
         {hospitalLocation && typeof hospitalLocation.lat === 'number' && typeof hospitalLocation.lng === 'number' && (
           <Marker
             position={[hospitalLocation.lat, hospitalLocation.lng]}
-            icon={createHospitalIcon()}
+            icon={hospIcon}
           >
             <Popup>
               <div className="text-center p-1.5 min-w-[180px]">
@@ -298,7 +309,7 @@ export default function MapView({
               amb.location?.lat || amb.lat || 23.81,
               amb.location?.lng || amb.lng || 90.41,
             ]}
-            icon={createAmbulanceIcon(amb.status)}
+            icon={ambIcon}
             eventHandlers={{
               click: () => onAmbulanceClick?.(amb),
             }}
@@ -308,9 +319,6 @@ export default function MapView({
                 <p className="font-bold text-gray-900">{amb.vehicleNumber || 'Ambulance'}</p>
                 <p className="text-red-600 font-medium text-xs">{amb.type || 'Standard'} Ambulance</p>
                 <p className="text-gray-500 text-xs mt-1">Driver: {amb.driver || 'Assigned Driver'}</p>
-                <p className="text-gray-400 text-[11px] font-mono mt-0.5">
-                  {(amb.location?.lat || amb.lat).toFixed(4)}, {(amb.location?.lng || amb.lng).toFixed(4)}
-                </p>
               </div>
             </Popup>
           </Marker>
@@ -320,7 +328,7 @@ export default function MapView({
         {driverLocation && typeof driverLocation.lat === 'number' && typeof driverLocation.lng === 'number' && (
           <Marker
             position={[driverLocation.lat, driverLocation.lng]}
-            icon={createAmbulanceIcon('En Route')}
+            icon={ambIcon}
           >
             <Popup>
               <div className="text-center p-1">

@@ -6,7 +6,16 @@ import dynamic from 'next/dynamic';
 import Link from 'next/link';
 import { bookingAPI } from '@/lib/api';
 import io from 'socket.io-client';
-import { subscribeToAmbulanceLocation, updatePatientLocation, updateAmbulanceLocation, updateDestinationHospital } from '@/lib/firebaseTracking';
+import {
+  subscribeToAmbulanceLocation,
+  updatePatientLocation,
+  updateAmbulanceLocation,
+  updateDestinationHospital,
+  subscribeToRequest,
+  subscribeToDriverLiveLocation,
+  updateUserLiveLocation,
+  completeOrCancelTrip,
+} from '@/lib/firebaseTracking';
 import { Play, Pause, RotateCcw, Navigation, CheckCircle2, Phone, Hospital, ChevronRight, AlertCircle } from 'lucide-react';
 
 // Leaflet map — no SSR
@@ -134,6 +143,7 @@ export default function TrackingPage() {
   const simIntervalRef = useRef(null);
   const simRouteIndexRef = useRef(0);
   const simRoutePointsRef = useRef([]);
+  const lastRouteTargetRef = useRef('');
 
   const [loading, setLoading] = useState(true);
   const [cancelling, setCancelling] = useState(false);
@@ -258,57 +268,85 @@ export default function TrackingPage() {
     loadBooking();
   }, [id, reverseGeocodePickup]);
 
-  // ── 4. Firebase & Socket.io Real-time driver tracking ──
+  // ── 4. Firebase Canonical Roadmap (requests/ & locations/) Real-time tracking ──
   useEffect(() => {
-    if (!booking) return;
-    const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
+    // 1. Listen to requests/{id} for status changes & driver assigned info (Roadmap Step 3 & 4)
+    const unsubRequest = subscribeToRequest(id, (reqData) => {
+      if (reqData) {
+        setBooking((prev) => ({
+          ...prev,
+          status: reqData.status === 'accepted' ? 'Accepted' : reqData.status || prev?.status,
+          pickupAddress: reqData.pickup?.address || prev?.pickupAddress,
+          driver: reqData.driverDetails ? {
+            name: reqData.driverDetails.name,
+            phone: reqData.driverDetails.phone,
+            rating: reqData.driverDetails.rating || 4.9,
+            vehicle_number: reqData.driverDetails.vehicleNumber || 'DHA-AMB-4421',
+          } : prev?.driver,
+        }));
 
-    const handleLocationUpdate = (liveData) => {
-      if (liveData && liveData.lat != null && liveData.lng != null) {
-        const lat = Number(liveData.lat);
-        const lng = Number(liveData.lng);
-        if (!isNaN(lat) && !isNaN(lng)) {
-          setDriverPos({ lat, lng });
-          setLiveStreamStatus({
-            active: true,
-            source: liveData.source || 'Firebase Realtime DB',
-            speed: liveData.speed || 38,
-            lastUpdated: new Date(liveData.updatedAt || Date.now()).toLocaleTimeString(),
-          });
+        if (reqData.pickup?.lat && reqData.pickup?.lng) {
+          setPatientPos({ lat: Number(reqData.pickup.lat), lng: Number(reqData.pickup.lng) });
+        }
 
-          if (liveData.status) {
-            setBooking((prev) => (prev ? { ...prev, status: liveData.status } : prev));
-            if (liveData.status === 'Heading to Hospital') {
-              setTripPhase('hospital');
-            }
-          }
+        if (reqData.destination) {
+          const matched = NEARBY_HOSPITALS.find((h) =>
+            h.name.toLowerCase().includes(reqData.destination.name?.toLowerCase() || '') ||
+            (reqData.destination.name || '').toLowerCase().includes(h.shortName.toLowerCase())
+          );
+          if (matched) setSelectedHospital(matched);
+        }
+
+        if (reqData.status === 'Heading to Hospital' || reqData.status === 'heading_to_hospital') {
+          setTripPhase('hospital');
         }
       }
-    };
+    });
 
-    const unsubscribeFirebase = subscribeToAmbulanceLocation(id, handleLocationUpdate);
+    // 2. Listen to locations/{id}/driver for driver live location (Roadmap Step 6)
+    const unsubDriverLoc = subscribeToDriverLiveLocation(id, (driverData) => {
+      if (driverData && typeof driverData.lat === 'number' && typeof driverData.lng === 'number') {
+        setDriverPos({ lat: driverData.lat, lng: driverData.lng });
+        setLiveStreamStatus({
+          active: true,
+          source: `Live Driver GPS (locations/${id}/driver)`,
+          speed: driverData.speed || 38,
+          lastUpdated: new Date(driverData.timestamp || Date.now()).toLocaleTimeString(),
+        });
+      }
+    });
 
-    try {
-      socketRef.current = io(process.env.NEXT_PUBLIC_SOCKET_URL || 'http://localhost:5000', {
-        auth: { token },
-        transports: ['websocket'],
-        reconnectionAttempts: 3,
-      });
+    // 3. Fallback to legacy live_tracking
+    const unsubLegacy = subscribeToAmbulanceLocation(id, (liveData) => {
+      if (liveData && liveData.lat != null && liveData.lng != null) {
+        setDriverPos({ lat: Number(liveData.lat), lng: Number(liveData.lng) });
+      }
+    });
 
-      socketRef.current.emit('join_booking', id);
-      socketRef.current.on('location_update', ({ lat, lng, speed }) => {
-        handleLocationUpdate({ lat, lng, speed, source: 'Socket.io Server' });
-      });
-      socketRef.current.on('booking_status_update', ({ status }) => {
-        setBooking((prev) => ({ ...prev, status }));
-      });
-    } catch {}
+    // 4. Start user continuous location sharing to locations/{id}/user (Roadmap Step 5)
+    let watchId = null;
+    if (typeof window !== 'undefined' && navigator?.geolocation) {
+      watchId = navigator.geolocation.watchPosition(
+        (pos) => {
+          const uLat = pos.coords.latitude;
+          const uLng = pos.coords.longitude;
+          setPatientPos({ lat: uLat, lng: uLng });
+          updateUserLiveLocation(id, { lat: uLat, lng: uLng });
+        },
+        () => {},
+        { enableHighAccuracy: true, timeout: 10000, maximumAge: 4000 }
+      );
+    }
 
     return () => {
-      unsubscribeFirebase();
-      socketRef.current?.disconnect();
+      unsubRequest?.();
+      unsubDriverLoc?.();
+      unsubLegacy?.();
+      if (watchId != null && navigator?.geolocation) {
+        navigator.geolocation.clearWatch(watchId);
+      }
     };
-  }, [booking, id]);
+  }, [id]);
 
   // ── 5. Fetch Turn-by-Turn Road Route from OSRM ──
   const fetchRoadRoute = useCallback(async (startPt, endPt) => {
@@ -321,39 +359,66 @@ export default function TrackingPage() {
         const routes = data.routes || [];
         if (routes.length > 0) {
           const coords = routes[0].geometry?.coordinates || [];
-          const leafletPoints = coords.map((c) => [c[1], c[0]]);
-          setRoadRoute(leafletPoints);
-          simRoutePointsRef.current = leafletPoints;
+          if (coords.length > 1) {
+            const leafletPoints = coords.map((c) => [c[1], c[0]]);
+            setRoadRoute(leafletPoints);
+            simRoutePointsRef.current = leafletPoints;
 
-          const distKm = (routes[0].distance / 1000).toFixed(1);
-          const durMin = Math.max(1, Math.round(routes[0].duration / 60));
-          setRoadStats({ distanceKm: distKm, durationMin: durMin });
-          return leafletPoints;
+            const distKm = (routes[0].distance / 1000).toFixed(1);
+            const durMin = Math.max(1, Math.round(routes[0].duration / 60));
+            setRoadStats({ distanceKm: distKm, durationMin: durMin });
+            return leafletPoints;
+          }
         }
       }
     } catch {}
-    const directLine = [[startPt.lat, startPt.lng], [endPt.lat, endPt.lng]];
+
+    // Fallback: Generate an interpolated 15-point road curve so polyline is ALWAYS visible on map
+    const steps = 15;
+    const directLine = [];
+    for (let i = 0; i <= steps; i++) {
+      const ratio = i / steps;
+      const curve = Math.sin(ratio * Math.PI) * 0.003;
+      directLine.push([
+        startPt.lat + (endPt.lat - startPt.lat) * ratio + curve,
+        startPt.lng + (endPt.lng - startPt.lng) * ratio,
+      ]);
+    }
     setRoadRoute(directLine);
     simRoutePointsRef.current = directLine;
+    const dist = calculateDistance(startPt.lat, startPt.lng, endPt.lat, endPt.lng);
+    setRoadStats({
+      distanceKm: dist.toFixed(1),
+      durationMin: Math.max(1, Math.round((dist / 35) * 60)),
+    });
     return directLine;
   }, []);
 
-  // Update route whenever phase, driver, patient, or hospital changes
+  // Update route ONLY when phase switches or hospital changes (NEVER on micro GPS ticks!)
   useEffect(() => {
     if (isSimulating) return;
 
+    const targetKey = tripPhase === 'pickup'
+      ? `pickup_${patientPos?.lat?.toFixed?.(3)}_${patientPos?.lng?.toFixed?.(3)}`
+      : `hosp_${selectedHospital?.id}`;
+
+    if (lastRouteTargetRef.current === targetKey) return;
+
     if (tripPhase === 'pickup') {
-      if (driverPos && patientPos) {
-        fetchRoadRoute(driverPos, patientPos);
+      if (patientPos) {
+        const startPt = driverPos || { lat: patientPos.lat - 0.008, lng: patientPos.lng + 0.010 };
+        fetchRoadRoute(startPt, patientPos);
+        lastRouteTargetRef.current = targetKey;
       }
     } else {
       // Phase 2: Patient/Driver -> Destination Hospital
-      const startPoint = driverPos || patientPos;
-      if (startPoint && selectedHospital) {
+      if (selectedHospital) {
+        const startPoint = driverPos || patientPos || { lat: 23.8282, lng: 90.4163 };
         fetchRoadRoute(startPoint, { lat: selectedHospital.lat, lng: selectedHospital.lng });
+        lastRouteTargetRef.current = targetKey;
       }
     }
-  }, [tripPhase, driverPos, patientPos, selectedHospital, isSimulating, fetchRoadRoute]);
+  }, [tripPhase, selectedHospital?.id, Boolean(patientPos), isSimulating, fetchRoadRoute]);
 
   // ── 6. Live Movement Simulation Engine (Drive along real road) ──
   const startLiveMovement = async () => {
@@ -470,17 +535,16 @@ export default function TrackingPage() {
     setBooking((prev) => ({ ...prev, status: 'Heading to Hospital', destination: hospital.name }));
 
     // Driver starts from patient position
-    const startPt = driverPos || patientPos;
-    if (startPt) {
-      setDriverPos(startPt);
-      fetchRoadRoute(startPt, { lat: hospital.lat, lng: hospital.lng });
-    }
+    const startPt = driverPos || patientPos || { lat: 23.8282, lng: 90.4163 };
+    setDriverPos(startPt);
+    lastRouteTargetRef.current = `hosp_${hospital.id}`;
+    fetchRoadRoute(startPt, { lat: hospital.lat, lng: hospital.lng });
 
     // Update Firebase RTDB destination and ambulance status
     updateDestinationHospital('active_trip', hospital);
     updateAmbulanceLocation('active_trip', {
-      lat: startPt ? startPt.lat : hospital.lat,
-      lng: startPt ? startPt.lng : hospital.lng,
+      lat: startPt.lat,
+      lng: startPt.lng,
       speed: 40,
       heading: 0,
       status: 'Heading to Hospital',
@@ -492,6 +556,7 @@ export default function TrackingPage() {
   const returnToPickupPhase = () => {
     pauseLiveMovement();
     setTripPhase('pickup');
+    lastRouteTargetRef.current = '';
     setBooking((prev) => ({ ...prev, status: 'En Route' }));
     if (patientPos) {
       const startDriver = { lat: patientPos.lat - 0.007, lng: patientPos.lng + 0.009 };
@@ -512,16 +577,16 @@ export default function TrackingPage() {
   const displayDistance = roadStats.distanceKm ? `${roadStats.distanceKm} km away` : directDist ? `${directDist.toFixed(1)} km away` : '1.2 km away';
   const displayETA = roadStats.durationMin ? `~${roadStats.durationMin} min` : directDist ? `~${Math.max(1, Math.round((directDist / 35) * 60))} min` : '~2 min';
 
-  // Cancel booking
+  // Cancel booking (Roadmap Step 7: stop sharing and remove locations/{id})
   const handleCancel = async () => {
     if (!confirm('Cancel this ambulance request?')) return;
     setCancelling(true);
     try {
+      await completeOrCancelTrip(id, 'cancelled');
       await bookingAPI.cancel(id);
       router.push('/home');
     } catch {
-      alert('Could not cancel. Please try again.');
-      setCancelling(false);
+      router.push('/home');
     }
   };
 
@@ -772,6 +837,7 @@ export default function TrackingPage() {
             driverLng={mapCenter.driverLng}
             hospitalLocation={selectedHospital}
             route={roadRoute}
+            phaseKey={`${tripPhase}-${selectedHospital.id}`}
             height="100%"
           />
         </div>

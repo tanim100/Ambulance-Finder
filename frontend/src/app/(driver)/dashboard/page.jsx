@@ -11,6 +11,7 @@ import Button from '@/components/ui/Button';
 import Card from '@/components/ui/Card';
 import { driverAPI } from '@/lib/api';
 import { useSocket } from '@/hooks/useSocket';
+import { subscribeToPendingRequests, acceptAmbulanceRequest } from '@/lib/firebaseTracking';
 
 const MOCK_INCOMING = {
   _id: 'req-001',
@@ -42,13 +43,34 @@ export default function DriverDashboard() {
     };
   }, [on, off]);
 
-  // Demo: show incoming request when online
+  // Real Firebase Realtime Database listener for incoming requests
   useEffect(() => {
-    if (isOnline && !incomingRequest && !activeTrip) {
-      const timer = setTimeout(() => setIncomingRequest(MOCK_INCOMING), 3000);
-      return () => clearTimeout(timer);
+    if (!isOnline) {
+      setIncomingRequest(null);
+      return;
     }
-  }, [isOnline, incomingRequest, activeTrip]);
+
+    const unsubFirebase = subscribeToPendingRequests((requests) => {
+      if (requests && requests.length > 0 && !activeTrip) {
+        const topReq = requests[0];
+        setIncomingRequest({
+          _id: topReq.requestId,
+          requestId: topReq.requestId,
+          patientName: topReq.patientDetails?.name || 'Emergency Patient',
+          emergencyType: topReq.patientDetails?.emergencyType || 'General Emergency',
+          pickupLocation: topReq.pickup?.address || 'Current Patient Location',
+          pickupCoords: { lat: topReq.pickup?.lat || 23.8282, lng: topReq.pickup?.lng || 90.4163 },
+          destination: topReq.destination?.name || 'Nearest General Hospital',
+          estimatedDistance: 1.8,
+          ambulanceType: topReq.patientDetails?.ambulanceType || 'Basic Life Support',
+          user: { phone: topReq.patientDetails?.phone || '+880 1700-000000' },
+          notes: topReq.patientDetails?.notes || '',
+        });
+      }
+    });
+
+    return () => unsubFirebase();
+  }, [isOnline, activeTrip]);
 
   const handleToggleOnline = async () => {
     setToggling(true);
@@ -64,13 +86,27 @@ export default function DriverDashboard() {
   const handleAccept = async () => {
     if (!incomingRequest) return;
     setAccepting(true);
+    const reqId = incomingRequest.requestId || incomingRequest._id || 'active_trip';
+
     try {
-      await driverAPI.updateBookingStatus(incomingRequest._id, 'Accepted');
-    } catch {}
+      // Roadmap Step 4: Driver accepts request via transaction
+      await acceptAmbulanceRequest(reqId, {
+        uid: 'driver_dha_4421',
+        name: 'Assigned Driver (Md. Rahim)',
+        phone: '01942809157',
+        vehicleNumber: 'DHA-AMB-4421',
+        rating: 4.9,
+      });
+
+      await driverAPI.updateBookingStatus(reqId, 'Accepted');
+    } catch (e) {
+      console.warn('Accept booking error:', e);
+    }
+
     setActiveTrip(incomingRequest);
     setIncomingRequest(null);
     setAccepting(false);
-    router.push('/active');
+    router.push(`/active?id=${reqId}`);
   };
 
   const handleReject = () => {
@@ -183,14 +219,40 @@ export default function DriverDashboard() {
                 <Badge status={incomingRequest.ambulanceType.toLowerCase()} label={incomingRequest.ambulanceType} />
               </div>
 
-              <div className="bg-gray-50 rounded-xl p-3 space-y-2 text-sm text-gray-600">
+              <div className="bg-gray-50 rounded-xl p-3.5 space-y-2.5 text-sm text-gray-700 border border-gray-100">
                 <div className="flex items-start gap-2">
-                  <MapPin size={14} className="text-primary-500 mt-0.5 flex-shrink-0" />
-                  <span>{incomingRequest.pickupLocation}</span>
+                  <MapPin size={14} className="text-rose-500 mt-0.5 flex-shrink-0" />
+                  <div>
+                    <span className="text-[10px] text-gray-400 block font-semibold uppercase">Pickup Location</span>
+                    <span className="font-medium">{incomingRequest.pickupLocation}</span>
+                  </div>
                 </div>
-                <div className="flex items-center gap-2">
-                  <Navigation size={14} className="text-blue-500" />
-                  <span>{incomingRequest.estimatedDistance} km from you</span>
+
+                {incomingRequest.destination && (
+                  <div className="flex items-start gap-2 pt-1.5 border-t border-gray-200/60">
+                    <span className="text-sm mt-0.5 shrink-0">🏥</span>
+                    <div>
+                      <span className="text-[10px] text-gray-400 block font-semibold uppercase">Destination Hospital</span>
+                      <span className="font-medium text-emerald-700">{incomingRequest.destination}</span>
+                    </div>
+                  </div>
+                )}
+
+                {incomingRequest.user?.phone && (
+                  <div className="flex items-center justify-between pt-1.5 border-t border-gray-200/60">
+                    <span className="text-xs text-gray-500">📞 Patient Phone:</span>
+                    <a
+                      href={`tel:${incomingRequest.user.phone}`}
+                      className="text-xs font-bold text-blue-600 hover:underline font-mono"
+                    >
+                      {incomingRequest.user.phone}
+                    </a>
+                  </div>
+                )}
+
+                <div className="flex items-center justify-between pt-1 text-xs text-gray-500">
+                  <span>Estimated Distance:</span>
+                  <span className="font-bold text-emerald-700">{incomingRequest.estimatedDistance} km away</span>
                 </div>
               </div>
 
