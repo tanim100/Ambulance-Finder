@@ -12,7 +12,15 @@ const MapView = dynamic(() => import('./MapView'), {
   ),
 });
 
-export default function MapComponent({ pickupLat, pickupLng, driverLat, driverLng, route: customRoute = null, height = '100%' }) {
+export default function MapComponent({
+  pickupLat,
+  pickupLng,
+  driverLat,
+  driverLng,
+  hospitalLocation = null,
+  route: customRoute = null,
+  height = '100%',
+}) {
   // Only create locations when coordinates are valid non-null numbers
   const userLocation =
     pickupLat != null && pickupLng != null && !isNaN(Number(pickupLat)) && !isNaN(Number(pickupLng))
@@ -24,13 +32,15 @@ export default function MapComponent({ pickupLat, pickupLng, driverLat, driverLn
       ? { lat: Number(driverLat), lng: Number(driverLng) }
       : null;
 
-  // Smart center: midpoint if both present, else whichever is available, else Dhaka
+  // Smart center: midpoint if both present, else hospital, else whichever is available, else Dhaka
   const center = driverLocation && userLocation
     ? [(driverLocation.lat + userLocation.lat) / 2, (driverLocation.lng + userLocation.lng) / 2]
     : driverLocation
     ? [driverLocation.lat, driverLocation.lng]
     : userLocation
     ? [userLocation.lat, userLocation.lng]
+    : hospitalLocation
+    ? [hospitalLocation.lat, hospitalLocation.lng]
     : [23.8103, 90.4125];
 
   const route =
@@ -45,6 +55,7 @@ export default function MapComponent({ pickupLat, pickupLng, driverLat, driverLn
       center={center}
       userLocation={userLocation}
       driverLocation={driverLocation}
+      hospitalLocation={hospitalLocation}
       ambulances={[]}
       route={route}
       height={height}

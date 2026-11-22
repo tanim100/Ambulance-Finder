@@ -1,6 +1,6 @@
 'use client';
 // src/components/map/MapView.jsx
-// Interactive Leaflet map with Live Current Location Pin, Ambulance Markers & Recenter Controls
+// Interactive Leaflet map with Live Current Location Pin, Ambulance Markers, Destination Hospital & Navigation Route
 
 import { useEffect, useRef } from 'react';
 import { MapContainer, TileLayer, Marker, Popup, useMap, Polyline, useMapEvents } from 'react-leaflet';
@@ -79,25 +79,61 @@ export const createUserIcon = () =>
     popupAnchor: [0, -18],
   });
 
-// Auto-fit bounds to encompass both user and driver
-function MapFitBounds({ userLocation, driverLocation }) {
+// Destination Hospital Icon (Emerald Green with Hospital Pulse)
+export const createHospitalIcon = () =>
+  L.divIcon({
+    className: 'custom-hospital-icon',
+    html: `<div style="
+      position: relative;
+      background: #059669;
+      border: 3px solid white;
+      border-radius: 50%;
+      width: 44px;
+      height: 44px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 22px;
+      box-shadow: 0 4px 14px rgba(5,150,105,0.6);
+      cursor: pointer;
+      animation: hospital-pulse 2s infinite ease-out;
+    ">
+      🏥
+      <span style="
+        position: absolute;
+        top: -2px;
+        right: -2px;
+        width: 12px;
+        height: 12px;
+        background: #EF4444;
+        border: 2px solid white;
+        border-radius: 50%;
+      "></span>
+    </div>`,
+    iconSize: [44, 44],
+    iconAnchor: [22, 22],
+    popupAnchor: [0, -22],
+  });
+
+// Auto-fit bounds to encompass user, driver, and destination hospital
+function MapFitBounds({ userLocation, driverLocation, hospitalLocation }) {
   const map = useMap();
   const hasFitted = useRef(false);
 
   useEffect(() => {
-    if (userLocation?.lat && userLocation?.lng && driverLocation?.lat && driverLocation?.lng) {
-      if (!hasFitted.current) {
-        try {
-          const bounds = L.latLngBounds([
-            [userLocation.lat, userLocation.lng],
-            [driverLocation.lat, driverLocation.lng],
-          ]);
-          map.fitBounds(bounds, { padding: [50, 50], maxZoom: 16 });
-          hasFitted.current = true;
-        } catch {}
-      }
+    const validPoints = [];
+    if (userLocation?.lat && userLocation?.lng) validPoints.push([userLocation.lat, userLocation.lng]);
+    if (driverLocation?.lat && driverLocation?.lng) validPoints.push([driverLocation.lat, driverLocation.lng]);
+    if (hospitalLocation?.lat && hospitalLocation?.lng) validPoints.push([hospitalLocation.lat, hospitalLocation.lng]);
+
+    if (validPoints.length >= 2 && !hasFitted.current) {
+      try {
+        const bounds = L.latLngBounds(validPoints);
+        map.fitBounds(bounds, { padding: [55, 55], maxZoom: 16 });
+        hasFitted.current = true;
+      } catch {}
     }
-  }, [userLocation?.lat, userLocation?.lng, driverLocation?.lat, driverLocation?.lng, map]);
+  }, [userLocation?.lat, userLocation?.lng, driverLocation?.lat, driverLocation?.lng, hospitalLocation?.lat, hospitalLocation?.lng, map]);
 
   return null;
 }
@@ -131,20 +167,20 @@ export default function MapView({
   userLocation = null,
   ambulances = [],
   driverLocation = null,
+  hospitalLocation = null,
   route = null,
   onAmbulanceClick = null,
   onLocationSelect = null,
   className = '',
   height = '100%',
 }) {
-  // Only show user pin when explicitly provided
   const effectiveUserLoc = userLocation && typeof userLocation.lat === 'number' && typeof userLocation.lng === 'number'
     ? userLocation
     : null;
 
   return (
     <div className={`relative rounded-2xl overflow-hidden ${className}`} style={{ height, width: '100%' }}>
-      {/* Global CSS for pulsing location radar */}
+      {/* Global CSS for pulsing markers */}
       <style jsx global>{`
         @keyframes leaflet-pulse {
           0% { transform: scale(0.6); opacity: 0.9; }
@@ -155,6 +191,11 @@ export default function MapView({
           0% { box-shadow: 0 0 0 0 rgba(220, 38, 38, 0.6); }
           70% { box-shadow: 0 0 0 12px rgba(220, 38, 38, 0); }
           100% { box-shadow: 0 0 0 0 rgba(220, 38, 38, 0); }
+        }
+        @keyframes hospital-pulse {
+          0% { box-shadow: 0 0 0 0 rgba(5, 150, 105, 0.6); }
+          70% { box-shadow: 0 0 0 14px rgba(5, 150, 105, 0); }
+          100% { box-shadow: 0 0 0 0 rgba(5, 150, 105, 0); }
         }
       `}</style>
 
@@ -170,13 +211,13 @@ export default function MapView({
           attribution='&copy; OpenStreetMap contributors'
         />
         <MapRecenter center={center} zoom={zoom} />
-        <MapFitBounds userLocation={effectiveUserLoc} driverLocation={driverLocation} />
+        <MapFitBounds userLocation={effectiveUserLoc} driverLocation={driverLocation} hospitalLocation={hospitalLocation} />
         {onLocationSelect && <MapClickHandler onLocationSelect={onLocationSelect} />}
 
         {/* Route polyline — dual layer (glow + navigation path) */}
         {route && route.length > 1 && (
           <>
-            {/* Outer Blue Route Glow */}
+            {/* Outer Route Glow */}
             <Polyline
               positions={route}
               pathOptions={{
@@ -187,7 +228,7 @@ export default function MapView({
                 lineJoin: 'round',
               }}
             />
-            {/* Inner Red Dashed Road Navigation Path */}
+            {/* Inner Dashed Road Navigation Path */}
             <Polyline
               positions={route}
               pathOptions={{
@@ -214,6 +255,36 @@ export default function MapView({
                 <p className="text-xs text-gray-500 font-mono mt-0.5">
                   {effectiveUserLoc.lat.toFixed(4)}, {effectiveUserLoc.lng.toFixed(4)}
                 </p>
+              </div>
+            </Popup>
+          </Marker>
+        )}
+
+        {/* Destination Hospital Marker */}
+        {hospitalLocation && typeof hospitalLocation.lat === 'number' && typeof hospitalLocation.lng === 'number' && (
+          <Marker
+            position={[hospitalLocation.lat, hospitalLocation.lng]}
+            icon={createHospitalIcon()}
+          >
+            <Popup>
+              <div className="text-center p-1.5 min-w-[180px]">
+                <p className="font-bold text-sm text-emerald-800 flex items-center justify-center gap-1">
+                  🏥 {hospitalLocation.name || 'Destination Hospital'}
+                </p>
+                <p className="text-xs text-gray-500 mt-0.5">{hospitalLocation.area || 'Emergency Center'}</p>
+                {hospitalLocation.emergency && (
+                  <p className="text-[11px] text-emerald-600 font-medium mt-1 bg-emerald-50 py-0.5 px-1.5 rounded">
+                    {hospitalLocation.emergency}
+                  </p>
+                )}
+                {hospitalLocation.hotline && (
+                  <a
+                    href={`tel:${hospitalLocation.hotline}`}
+                    className="inline-block mt-2 text-xs font-bold bg-emerald-600 text-white px-2.5 py-1 rounded-lg hover:bg-emerald-700 transition-colors"
+                  >
+                    📞 ER Hotline: {hospitalLocation.hotline}
+                  </a>
+                )}
               </div>
             </Popup>
           </Marker>
