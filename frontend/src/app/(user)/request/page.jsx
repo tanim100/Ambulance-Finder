@@ -14,7 +14,7 @@ import Button from '@/components/ui/Button';
 import AmbulanceTypeSelector from '@/components/ambulance/AmbulanceTypeSelector';
 import { bookingAPI } from '@/lib/api';
 import { useGeolocation } from '@/hooks/useGeolocation';
-import { updatePatientLocation } from '@/lib/firebaseTracking';
+import { updatePatientLocation, createAmbulanceRequest } from '@/lib/firebaseTracking';
 
 const MapView = dynamic(() => import('@/components/map/MapView'), {
   ssr: false,
@@ -473,28 +473,46 @@ export default function RequestPage() {
       }));
     } catch {}
 
-    try {
-      const res = await bookingAPI.create(payload);
-      const id = res.data?.booking?.id || res.data?.booking?._id || res.data?.id || res.data?._id || 'trip-' + Date.now();
-      setBookingId(id);
+    const id = 'req_' + Date.now();
+    setBookingId(id);
 
-      updatePatientLocation(id, {
-        lat: pickupCoords.lat,
-        lng: pickupCoords.lng,
-        address: form.pickupLocation,
+    try {
+      // 1. Create request in Firebase Realtime Database (requests/{requestId} & locations/{requestId}/user)
+      await createAmbulanceRequest({
+        requestId: id,
+        pickup: {
+          lat: pickupCoords.lat,
+          lng: pickupCoords.lng,
+          address: form.pickupLocation,
+        },
+        destination: matchedHospital ? {
+          name: matchedHospital.name,
+          lat: matchedHospital.lat || 23.8188,
+          lng: matchedHospital.lng || 90.4074,
+          hotline: matchedHospital.hotline || '',
+        } : {
+          name: form.destination || 'Nearest General Hospital (Auto-Triage)',
+          lat: 23.8188,
+          lng: 90.4074,
+          hotline: '',
+        },
+        patientDetails: {
+          name: form.patientName,
+          phone: form.phone || '+880 1700-000000',
+          emergencyType: form.emergencyType,
+          ambulanceType: form.ambulanceType,
+          notes: form.notes,
+        },
       });
+
+      // 2. Also register in Backend DB if online
+      try {
+        await bookingAPI.create(payload);
+      } catch {}
 
       setSubmitted(true);
-    } catch {
-      const id = 'trip-' + Date.now();
-      setBookingId(id);
-
-      updatePatientLocation(id, {
-        lat: pickupCoords.lat,
-        lng: pickupCoords.lng,
-        address: form.pickupLocation,
-      });
-
+    } catch (err) {
+      console.warn('Booking create fallback:', err);
       setSubmitted(true);
     } finally {
       setLoading(false);

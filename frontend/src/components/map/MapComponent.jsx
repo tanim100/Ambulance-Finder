@@ -19,6 +19,7 @@ export default function MapComponent({
   driverLng,
   hospitalLocation = null,
   route: customRoute = null,
+  phaseKey = '',
   height = '100%',
 }) {
   // Only create locations when coordinates are valid non-null numbers
@@ -32,8 +33,10 @@ export default function MapComponent({
       ? { lat: Number(driverLat), lng: Number(driverLng) }
       : null;
 
-  // Smart center: midpoint if both present, else hospital, else whichever is available, else Dhaka
-  const center = driverLocation && userLocation
+  // Smart center: midpoint if both present, else hospital, else patient, else Dhaka
+  const center = hospitalLocation && driverLocation
+    ? [(hospitalLocation.lat + driverLocation.lat) / 2, (hospitalLocation.lng + driverLocation.lng) / 2]
+    : driverLocation && userLocation
     ? [(driverLocation.lat + userLocation.lat) / 2, (driverLocation.lng + userLocation.lng) / 2]
     : driverLocation
     ? [driverLocation.lat, driverLocation.lng]
@@ -46,6 +49,8 @@ export default function MapComponent({
   const route =
     customRoute && customRoute.length > 1
       ? customRoute
+      : hospitalLocation && driverLocation
+      ? [[driverLocation.lat, driverLocation.lng], [hospitalLocation.lat, hospitalLocation.lng]]
       : userLocation && driverLocation
       ? [[driverLocation.lat, driverLocation.lng], [userLocation.lat, userLocation.lng]]
       : null;
@@ -58,6 +63,7 @@ export default function MapComponent({
       hospitalLocation={hospitalLocation}
       ambulances={[]}
       route={route}
+      phaseKey={phaseKey}
       height={height}
       zoom={14}
     />

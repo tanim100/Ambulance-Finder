@@ -2,6 +2,7 @@
 import { initializeApp, getApps, getApp } from 'firebase/app';
 import { getDatabase } from 'firebase/database';
 import { getFirestore } from 'firebase/firestore';
+import { getAuth } from 'firebase/auth';
 
 const isConfigured = Boolean(
   process.env.NEXT_PUBLIC_FIREBASE_API_KEY &&
@@ -23,6 +24,7 @@ const firebaseConfig = {
 let app = null;
 let rtdb = null;
 let db = null;
+let auth = null;
 
 try {
   app = !getApps().length ? initializeApp(firebaseConfig) : getApp();
@@ -40,8 +42,14 @@ try {
   } catch (e) {
     // Firestore optional
   }
+
+  try {
+    auth = getAuth(app);
+  } catch (e) {
+    // Auth optional
+  }
 } catch (e) {
   console.warn('Firebase init notice:', e?.message || e);
 }
 
-export { app, rtdb, db, firebaseConfig, isConfigured };
+export { app, rtdb, db, auth, firebaseConfig, isConfigured };

@@ -1,0 +1,29 @@
+{
+  "rules": {
+    "requests": {
+      ".read": true,
+      ".write": true,
+      "$requestId": {
+        ".read": true,
+        ".write": true
+      }
+    },
+    "locations": {
+      ".read": true,
+      ".write": true,
+      "$requestId": {
+        ".read": "auth != null ? (root.child('requests/'+$requestId+'/userId').val() === auth.uid || root.child('requests/'+$requestId+'/driverId').val() === auth.uid) : true",
+        "user": {
+          ".write": "auth != null ? root.child('requests/'+$requestId+'/userId').val() === auth.uid : true"
+        },
+        "driver": {
+          ".write": "auth != null ? root.child('requests/'+$requestId+'/driverId').val() === auth.uid : true"
+        }
+      }
+    },
+    "live_tracking": {
+      ".read": true,
+      ".write": true
+    }
+  }
+}
