@@ -24,41 +24,42 @@ export const createAmbulanceIcon = (status = 'En Route') =>
       background: #DC2626;
       border: 3px solid white;
       border-radius: 50%;
-      width: 40px;
-      height: 40px;
+      width: 44px;
+      height: 44px;
       display: flex;
       align-items: center;
       justify-content: center;
-      font-size: 20px;
-      box-shadow: 0 4px 12px rgba(220,38,38,0.5);
+      font-size: 22px;
+      box-shadow: 0 4px 14px rgba(220,38,38,0.55);
       cursor: pointer;
+      animation: pulse-ring 2s infinite ease-out;
     ">
       🚑
       <span style="
         position: absolute;
         top: -2px;
         right: -2px;
-        width: 10px;
-        height: 10px;
+        width: 12px;
+        height: 12px;
         background: #10B981;
         border: 2px solid white;
         border-radius: 50%;
       "></span>
     </div>`,
-    iconSize: [40, 40],
-    iconAnchor: [20, 20],
-    popupAnchor: [0, -20],
+    iconSize: [44, 44],
+    iconAnchor: [22, 22],
+    popupAnchor: [0, -22],
   });
 
 // High-visibility pulsing Current Location User Icon
 export const createUserIcon = () =>
   L.divIcon({
     className: 'custom-user-icon',
-    html: `<div style="position: relative; width: 32px; height: 32px; display: flex; align-items: center; justify-content: center;">
+    html: `<div style="position: relative; width: 36px; height: 36px; display: flex; align-items: center; justify-content: center;">
       <div style="
         position: absolute;
-        width: 32px;
-        height: 32px;
+        width: 36px;
+        height: 36px;
         background: rgba(37, 99, 235, 0.35);
         border-radius: 50%;
         animation: leaflet-pulse 2s infinite ease-out;
@@ -68,22 +69,45 @@ export const createUserIcon = () =>
         background: #2563EB;
         border: 3px solid white;
         border-radius: 50%;
-        width: 18px;
-        height: 18px;
-        box-shadow: 0 2px 8px rgba(37,99,235,0.7);
+        width: 20px;
+        height: 20px;
+        box-shadow: 0 2px 10px rgba(37,99,235,0.7);
       "></div>
     </div>`,
-    iconSize: [32, 32],
-    iconAnchor: [16, 16],
-    popupAnchor: [0, -16],
+    iconSize: [36, 36],
+    iconAnchor: [18, 18],
+    popupAnchor: [0, -18],
   });
+
+// Auto-fit bounds to encompass both user and driver
+function MapFitBounds({ userLocation, driverLocation }) {
+  const map = useMap();
+  const hasFitted = useRef(false);
+
+  useEffect(() => {
+    if (userLocation?.lat && userLocation?.lng && driverLocation?.lat && driverLocation?.lng) {
+      if (!hasFitted.current) {
+        try {
+          const bounds = L.latLngBounds([
+            [userLocation.lat, userLocation.lng],
+            [driverLocation.lat, driverLocation.lng],
+          ]);
+          map.fitBounds(bounds, { padding: [50, 50], maxZoom: 16 });
+          hasFitted.current = true;
+        } catch {}
+      }
+    }
+  }, [userLocation?.lat, userLocation?.lng, driverLocation?.lat, driverLocation?.lng, map]);
+
+  return null;
+}
 
 // Auto-recenter when center prop changes
 function MapRecenter({ center, zoom }) {
   const map = useMap();
   useEffect(() => {
     if (center && Array.isArray(center) && center[0] && center[1]) {
-      map.flyTo(center, zoom || map.getZoom() || 15, { duration: 1.0 });
+      map.flyTo(center, zoom || map.getZoom() || 15, { duration: 0.8 });
     }
   }, [center, zoom, map]);
   return null;
@@ -113,7 +137,7 @@ export default function MapView({
   className = '',
   height = '100%',
 }) {
-  // Only show user pin when explicitly provided — do NOT fall back to center
+  // Only show user pin when explicitly provided
   const effectiveUserLoc = userLocation && typeof userLocation.lat === 'number' && typeof userLocation.lng === 'number'
     ? userLocation
     : null;
@@ -126,6 +150,11 @@ export default function MapView({
           0% { transform: scale(0.6); opacity: 0.9; }
           70% { transform: scale(1.6); opacity: 0; }
           100% { transform: scale(1.6); opacity: 0; }
+        }
+        @keyframes pulse-ring {
+          0% { box-shadow: 0 0 0 0 rgba(220, 38, 38, 0.6); }
+          70% { box-shadow: 0 0 0 12px rgba(220, 38, 38, 0); }
+          100% { box-shadow: 0 0 0 0 rgba(220, 38, 38, 0); }
         }
       `}</style>
 
@@ -141,7 +170,37 @@ export default function MapView({
           attribution='&copy; OpenStreetMap contributors'
         />
         <MapRecenter center={center} zoom={zoom} />
+        <MapFitBounds userLocation={effectiveUserLoc} driverLocation={driverLocation} />
         {onLocationSelect && <MapClickHandler onLocationSelect={onLocationSelect} />}
+
+        {/* Route polyline — dual layer (glow + navigation path) */}
+        {route && route.length > 1 && (
+          <>
+            {/* Outer Blue Route Glow */}
+            <Polyline
+              positions={route}
+              pathOptions={{
+                color: '#2563EB',
+                weight: 7,
+                opacity: 0.35,
+                lineCap: 'round',
+                lineJoin: 'round',
+              }}
+            />
+            {/* Inner Red Dashed Road Navigation Path */}
+            <Polyline
+              positions={route}
+              pathOptions={{
+                color: '#DC2626',
+                weight: 4,
+                opacity: 0.95,
+                dashArray: '8, 8',
+                lineCap: 'round',
+                lineJoin: 'round',
+              }}
+            />
+          </>
+        )}
 
         {/* User / Patient Pickup Location Marker */}
         {effectiveUserLoc && (
@@ -206,17 +265,6 @@ export default function MapView({
               </div>
             </Popup>
           </Marker>
-        )}
-
-        {/* Route polyline */}
-        {route && route.length > 1 && (
-          <Polyline
-            positions={route}
-            color="#DC2626"
-            weight={4}
-            opacity={0.8}
-            dashArray="8, 4"
-          />
         )}
       </MapContainer>
     </div>

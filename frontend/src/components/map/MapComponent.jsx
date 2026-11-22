@@ -12,7 +12,7 @@ const MapView = dynamic(() => import('./MapView'), {
   ),
 });
 
-export default function MapComponent({ pickupLat, pickupLng, driverLat, driverLng, height = '100%' }) {
+export default function MapComponent({ pickupLat, pickupLng, driverLat, driverLng, route: customRoute = null, height = '100%' }) {
   // Only create locations when coordinates are valid non-null numbers
   const userLocation =
     pickupLat != null && pickupLng != null && !isNaN(Number(pickupLat)) && !isNaN(Number(pickupLng))
@@ -34,7 +34,9 @@ export default function MapComponent({ pickupLat, pickupLng, driverLat, driverLn
     : [23.8103, 90.4125];
 
   const route =
-    userLocation && driverLocation
+    customRoute && customRoute.length > 1
+      ? customRoute
+      : userLocation && driverLocation
       ? [[driverLocation.lat, driverLocation.lng], [userLocation.lat, userLocation.lng]]
       : null;
 
