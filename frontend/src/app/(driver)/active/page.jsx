@@ -49,18 +49,20 @@ export default function DriverActivePage() {
   const [trip, setTrip] = useState({ ...ACTIVE_TRIP, _id: tripIdParam });
   const [updating, setUpdating] = useState(false);
   const [completed, setCompleted] = useState(false);
+  const watchIdRef = useRef(null);
 
-  // Driver current coordinates — start with null so we don't use fake Dhaka default
-  const [activeLoc, setActiveLoc] = useState(null);
-  const gpsWatchIdRef = useRef(null);
-
-  // Safe accessor — returns a placeholder when GPS not yet detected
-  const safeActiveLoc = activeLoc || { lat: 23.8103, lng: 90.4125, speed: 0, heading: 0, source: 'Detecting GPS...' };
+  // Driver current coordinates — start with Dhaka center; updated by real GPS
+  const [activeLoc, setActiveLoc] = useState({
+    lat: 23.8103,
+    lng: 90.4125,
+    speed: 0,
+    heading: 0,
+    source: 'Default (GPS pending...)',
+  });
 
   const [isSimulating, setIsSimulating] = useState(false);
   const [shutterState, setShutterState] = useState('half'); // 'collapsed' | 'half' | 'expanded'
   const touchStartY = useRef(0);
-  const isSimulatingRef = useRef(false);
   const [firebaseStatus, setFirebaseStatus] = useState({
     connected: false,
     lastSyncTime: null,
@@ -85,31 +87,73 @@ export default function DriverActivePage() {
       }
     });
 
-    // Start continuous GPS watch immediately
-    if (navigator.geolocation) {
-      gpsWatchIdRef.current = navigator.geolocation.watchPosition(
+    // Start continuous GPS watch immediately on mount
+    if (navigator?.geolocation) {
+      navigator.geolocation.getCurrentPosition(
         (pos) => {
-          if (isSimulatingRef.current) return; // skip if simulating
-          const newLoc = {
+          const loc = {
             lat: pos.coords.latitude,
             lng: pos.coords.longitude,
-            accuracy: pos.coords.accuracy,
             speed: pos.coords.speed ? Math.round(pos.coords.speed * 3.6) : 0,
             heading: pos.coords.heading || 0,
-            source: 'Live Device GPS (Continuous)',
+            source: 'Device GPS (High Accuracy)',
           };
-          setActiveLoc(newLoc);
+          setActiveLoc(loc);
+          try { localStorage.setItem('driver_last_location', JSON.stringify(loc)); } catch {}
         },
-        (err) => {
-          console.warn('GPS watch error:', err.message);
+        () => {
+          // Try low-accuracy fallback
+          navigator.geolocation.getCurrentPosition(
+            (pos) => {
+              const loc = {
+                lat: pos.coords.latitude,
+                lng: pos.coords.longitude,
+                speed: 0,
+                heading: 0,
+                source: 'Device Location (Network)',
+              };
+              setActiveLoc(loc);
+              try { localStorage.setItem('driver_last_location', JSON.stringify(loc)); } catch {}
+            },
+            () => {
+              // Load last known location from storage
+              try {
+                const saved = localStorage.getItem('driver_last_location');
+                if (saved) {
+                  const p = JSON.parse(saved);
+                  if (p?.lat && p?.lng) setActiveLoc({ ...p, source: 'Last Known GPS' });
+                }
+              } catch {}
+            },
+            { enableHighAccuracy: false, timeout: 8000, maximumAge: 30000 }
+          );
         },
-        { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 }
+        { enableHighAccuracy: true, timeout: 12000, maximumAge: 0 }
+      );
+
+      // Continuous watch for live updates
+      watchIdRef.current = navigator.geolocation.watchPosition(
+        (pos) => {
+          if (!isSimulating) {
+            const loc = {
+              lat: pos.coords.latitude,
+              lng: pos.coords.longitude,
+              speed: pos.coords.speed ? Math.round(pos.coords.speed * 3.6) : 0,
+              heading: pos.coords.heading || 0,
+              source: 'Live Device GPS',
+            };
+            setActiveLoc(loc);
+            try { localStorage.setItem('driver_last_location', JSON.stringify(loc)); } catch {}
+          }
+        },
+        () => {},
+        { enableHighAccuracy: true, timeout: 10000, maximumAge: 5000 }
       );
     }
 
     return () => {
-      if (gpsWatchIdRef.current) {
-        navigator.geolocation.clearWatch(gpsWatchIdRef.current);
+      if (watchIdRef.current != null) {
+        navigator.geolocation.clearWatch(watchIdRef.current);
       }
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -134,25 +178,17 @@ export default function DriverActivePage() {
     } catch {}
   }, []);
 
-  // Keep isSimulatingRef in sync with state so the GPS watch callback can check it
-  useEffect(() => {
-    isSimulatingRef.current = isSimulating;
-  }, [isSimulating]);
-
-  // Update activeLoc whenever device hardware GPS or location arrives (from useGeolocation hook)
+  // Update activeLoc whenever device hardware GPS or location arrives
   useEffect(() => {
     if (geoLoc && typeof geoLoc.lat === 'number' && typeof geoLoc.lng === 'number' && !isSimulating) {
-      // Only use if it's real GPS (not default fallback Dhaka)
-      if (geoLoc.source !== 'default') {
-        setActiveLoc((prev) => ({
-          ...prev,
-          lat: geoLoc.lat,
-          lng: geoLoc.lng,
-          speed: geoLoc.speed ? Math.round(geoLoc.speed * 3.6) : (prev?.speed || 0),
-          heading: geoLoc.heading || prev?.heading || 0,
-          source: geoLoc.label || 'Real Device Location',
-        }));
-      }
+      setActiveLoc((prev) => ({
+        ...prev,
+        lat: geoLoc.lat,
+        lng: geoLoc.lng,
+        speed: geoLoc.speed ? Math.round(geoLoc.speed * 3.6) : (prev.speed || 40),
+        heading: geoLoc.heading || prev.heading || 0,
+        source: geoLoc.label || 'Real Device Location',
+      }));
     }
   }, [geoLoc, isSimulating]);
 
@@ -168,12 +204,12 @@ export default function DriverActivePage() {
       const res = await updateAmbulanceLocation(trip._id, {
         lat: coords.lat,
         lng: coords.lng,
-        speed: coords.speed || 0,
+        speed: coords.speed || 35,
         heading: coords.heading || 0,
         status: currentStatus,
         driverName: 'Assigned Driver',
         vehicleNumber: trip.vehicleNumber || 'DHA-AMB-4421',
-        source: coords.source || 'Live Device GPS',
+        source: coords.source || 'Real Live Device Network/GPS',
       });
 
       setFirebaseStatus({
@@ -207,11 +243,10 @@ export default function DriverActivePage() {
     if (isSimulating) {
       simulationTimerRef.current = setInterval(() => {
         setActiveLoc((prev) => {
-          const startLoc = prev || safeActiveLoc;
           const target = trip.userLocation || { lat: 23.8103, lng: 90.4125 };
           const step = 0.0006;
-          const dLat = target.lat - startLoc.lat;
-          const dLng = target.lng - startLoc.lng;
+          const dLat = target.lat - prev.lat;
+          const dLng = target.lng - prev.lng;
           const dist = Math.sqrt(dLat * dLat + dLng * dLng);
 
           if (dist < 0.0004) {
@@ -220,8 +255,8 @@ export default function DriverActivePage() {
           }
 
           return {
-            lat: startLoc.lat + (dLat / dist) * step,
-            lng: startLoc.lng + (dLng / dist) * step,
+            lat: prev.lat + (dLat / dist) * step,
+            lng: prev.lng + (dLng / dist) * step,
             speed: Math.round(35 + Math.random() * 10),
             heading: Math.round((Math.atan2(dLng, dLat) * 180) / Math.PI),
             source: 'Simulated Movement Demo',
@@ -270,17 +305,34 @@ export default function DriverActivePage() {
           const newLoc = {
             lat: pos.coords.latitude,
             lng: pos.coords.longitude,
-            speed: pos.coords.speed ? Math.round(pos.coords.speed * 3.6) : 40,
+            speed: pos.coords.speed ? Math.round(pos.coords.speed * 3.6) : 0,
             heading: pos.coords.heading || 0,
             source: 'Device Hardware GPS (High Accuracy)',
           };
           setActiveLoc(newLoc);
           broadcastLocation(newLoc, trip.status);
+          try { localStorage.setItem('driver_last_location', JSON.stringify(newLoc)); } catch {}
         },
-        () => {
-          getLocation();
+        (err) => {
+          // Fallback: low accuracy
+          navigator.geolocation.getCurrentPosition(
+            (pos) => {
+              const newLoc = {
+                lat: pos.coords.latitude,
+                lng: pos.coords.longitude,
+                speed: 0,
+                heading: 0,
+                source: 'Device Location (Network/WiFi)',
+              };
+              setActiveLoc(newLoc);
+              broadcastLocation(newLoc, trip.status);
+              try { localStorage.setItem('driver_last_location', JSON.stringify(newLoc)); } catch {}
+            },
+            () => { getLocation(); },
+            { enableHighAccuracy: false, timeout: 8000, maximumAge: 0 }
+          );
         },
-        { enableHighAccuracy: true, timeout: 8000 }
+        { enableHighAccuracy: true, timeout: 12000, maximumAge: 0 }
       );
     } else {
       getLocation();
@@ -394,7 +446,7 @@ export default function DriverActivePage() {
               <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
               <span className="text-xs text-emerald-600 font-semibold">{trip.status}</span>
               <span className="text-gray-300">•</span>
-              <span className="text-xs font-mono text-gray-500 font-semibold">{safeActiveLoc.speed} km/h</span>
+              <span className="text-xs font-mono text-gray-500 font-semibold">{activeLoc ? `${activeLoc.speed} km/h` : '— km/h'}</span>
             </div>
           </div>
         </div>
@@ -587,7 +639,7 @@ export default function DriverActivePage() {
               <div className="flex items-center justify-between text-[11px] text-gray-600 mb-2">
                 <span>Firebase Path: <strong className="font-mono text-emerald-700">live_tracking/active_trip</strong></span>
                 <span className="text-[10px] bg-emerald-50 text-emerald-700 font-semibold px-2 py-0.5 rounded-full border border-emerald-200">
-                  {safeActiveLoc.source || 'Real Location'}
+                  {activeLoc.source || 'Real Location'}
                 </span>
               </div>
 
@@ -602,7 +654,7 @@ export default function DriverActivePage() {
                 </div>
                 <div>
                   <span className="text-gray-400 block text-[10px]">SPEED</span>
-                  <span className="font-bold text-emerald-900">{activeLoc ? `${activeLoc.speed} km/h` : '-- km/h'}</span>
+                  <span className="font-bold text-emerald-900">{activeLoc ? `${activeLoc.speed} km/h` : '— km/h'}</span>
                 </div>
                 <div>
                   <span className="text-gray-400 block text-[10px]">STATUS</span>
@@ -736,3 +788,4 @@ export default function DriverActivePage() {
     </div>
   );
 }
+  

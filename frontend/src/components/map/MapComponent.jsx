@@ -13,10 +13,18 @@ const MapView = dynamic(() => import('./MapView'), {
 });
 
 export default function MapComponent({ pickupLat, pickupLng, driverLat, driverLng, height = '100%' }) {
-  const userLocation = pickupLat && pickupLng ? { lat: Number(pickupLat), lng: Number(pickupLng), label: 'Patient Pickup Point' } : null;
-  const driverLocation = driverLat && driverLng ? { lat: Number(driverLat), lng: Number(driverLng) } : null;
+  // Only create locations when coordinates are valid non-null numbers
+  const userLocation =
+    pickupLat != null && pickupLng != null && !isNaN(Number(pickupLat)) && !isNaN(Number(pickupLng))
+      ? { lat: Number(pickupLat), lng: Number(pickupLng), label: 'Patient Pickup Point' }
+      : null;
 
-  // Center on midpoint if both are present, or on driver, or on patient
+  const driverLocation =
+    driverLat != null && driverLng != null && !isNaN(Number(driverLat)) && !isNaN(Number(driverLng))
+      ? { lat: Number(driverLat), lng: Number(driverLng) }
+      : null;
+
+  // Smart center: midpoint if both present, else whichever is available, else Dhaka
   const center = driverLocation && userLocation
     ? [(driverLocation.lat + userLocation.lat) / 2, (driverLocation.lng + userLocation.lng) / 2]
     : driverLocation
@@ -25,9 +33,10 @@ export default function MapComponent({ pickupLat, pickupLng, driverLat, driverLn
     ? [userLocation.lat, userLocation.lng]
     : [23.8103, 90.4125];
 
-  const route = userLocation && driverLocation
-    ? [[driverLocation.lat, driverLocation.lng], [userLocation.lat, userLocation.lng]]
-    : null;
+  const route =
+    userLocation && driverLocation
+      ? [[driverLocation.lat, driverLocation.lng], [userLocation.lat, userLocation.lng]]
+      : null;
 
   return (
     <MapView

@@ -6,18 +6,17 @@ import dynamic from 'next/dynamic';
 import Link from 'next/link';
 import { bookingAPI } from '@/lib/api';
 import io from 'socket.io-client';
-import { rtdb } from '@/lib/firebase';
-import { ref, onValue, off } from 'firebase/database';
+import { subscribeToAmbulanceLocation } from '@/lib/firebaseTracking';
 
 // Leaflet map — no SSR
 const MapComponent = dynamic(() => import('@/components/map/MapComponent'), { ssr: false });
 
 const STATUS_STEPS = ['Pending', 'Accepted', 'En Route', 'Arrived', 'Completed'];
 
-// Helper to calculate distance in km
+// Helper to calculate distance in km (Haversine formula)
 function calculateDistance(lat1, lon1, lat2, lon2) {
-  if (!lat1 || !lon1 || !lat2 || !lon2) return null;
-  const R = 6371; // km
+  if (lat1 == null || lon1 == null || lat2 == null || lon2 == null) return null;
+  const R = 6371;
   const dLat = ((lat2 - lat1) * Math.PI) / 180;
   const dLon = ((lon2 - lon1) * Math.PI) / 180;
   const a =
@@ -30,13 +29,39 @@ function calculateDistance(lat1, lon1, lat2, lon2) {
   return R * c;
 }
 
+// Get user's current GPS location with high accuracy
+function getUserCurrentLocation() {
+  return new Promise((resolve) => {
+    if (typeof window === 'undefined' || !navigator?.geolocation) {
+      resolve(null);
+      return;
+    }
+
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        resolve({ lat: pos.coords.latitude, lng: pos.coords.longitude });
+      },
+      () => {
+        // Try low accuracy fallback
+        navigator.geolocation.getCurrentPosition(
+          (pos) => resolve({ lat: pos.coords.latitude, lng: pos.coords.longitude }),
+          () => resolve(null),
+          { enableHighAccuracy: false, timeout: 8000, maximumAge: 30000 }
+        );
+      },
+      { enableHighAccuracy: true, timeout: 12000, maximumAge: 0 }
+    );
+  });
+}
+
 export default function TrackingPage() {
   const { id } = useParams();
   const router = useRouter();
 
   const [booking, setBooking] = useState(null);
-  const [driverPos, setDriverPos] = useState(null);
-  const [patientPos, setPatientPos] = useState(null);
+  const [driverPos, setDriverPos] = useState(null);   // null until Firebase fires
+  const [patientPos, setPatientPos] = useState(null); // user/patient pickup pin
+  const [userCurrentPos, setUserCurrentPos] = useState(null); // user's live position
   const [loading, setLoading] = useState(true);
   const [cancelling, setCancelling] = useState(false);
   const [liveStreamStatus, setLiveStreamStatus] = useState({
@@ -48,40 +73,82 @@ export default function TrackingPage() {
 
   const socketRef = useRef(null);
 
-  // ── Load booking & patient exact location ──
+  // ── Get user's current live GPS position ──
   useEffect(() => {
-    // 1. Try to get user exact location from localStorage
-    let userExactLoc = { lat: 23.8103, lng: 90.4125 };
-    try {
-      const saved = localStorage.getItem('user_last_location');
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        if (parsed?.lat && parsed?.lng) {
-          userExactLoc = { lat: parsed.lat, lng: parsed.lng };
+    // Start continuous GPS watch for user
+    let watchId = null;
+    if (navigator?.geolocation) {
+      // Initial one-shot high-accuracy read
+      getUserCurrentLocation().then((loc) => {
+        if (loc) {
+          setUserCurrentPos(loc);
+          try { localStorage.setItem('user_last_location', JSON.stringify(loc)); } catch {}
         }
-      }
-    } catch {}
+      });
 
+      // Then watch for updates
+      watchId = navigator.geolocation.watchPosition(
+        (pos) => {
+          const loc = { lat: pos.coords.latitude, lng: pos.coords.longitude };
+          setUserCurrentPos(loc);
+          try { localStorage.setItem('user_last_location', JSON.stringify(loc)); } catch {}
+        },
+        () => {},
+        { enableHighAccuracy: true, timeout: 10000, maximumAge: 5000 }
+      );
+    } else {
+      // Try localStorage fallback
+      try {
+        const saved = localStorage.getItem('user_last_location');
+        if (saved) {
+          const p = JSON.parse(saved);
+          if (p?.lat && p?.lng) setUserCurrentPos(p);
+        }
+      } catch {}
+    }
+
+    return () => {
+      if (watchId != null) navigator.geolocation.clearWatch(watchId);
+    };
+  }, []);
+
+  // ── Load booking & patient exact pickup location ──
+  useEffect(() => {
     const loadBooking = async () => {
       try {
         const res = await bookingAPI.getById(id);
         const b = res.data?.booking || res.data?.data || res.data;
         setBooking(b);
 
-        const pLat = Number(b.pickupLat ?? b.pickup_lat ?? userExactLoc.lat);
-        const pLng = Number(b.pickupLng ?? b.pickup_lng ?? userExactLoc.lng);
-        setPatientPos({ lat: pLat, lng: pLng });
+        // Use coordinates stored in booking record (set at time of request)
+        const pLat = b.pickupLat ?? b.pickup_lat ?? null;
+        const pLng = b.pickupLng ?? b.pickup_lng ?? null;
 
-        // Don't set a fake driver position — wait for Firebase live data
-        setDriverPos(null);
+        if (pLat != null && pLng != null && !isNaN(Number(pLat)) && !isNaN(Number(pLng))) {
+          setPatientPos({ lat: Number(pLat), lng: Number(pLng) });
+        } else {
+          // Fall back to user's current GPS location
+          const userGPS = await getUserCurrentLocation();
+          if (userGPS) {
+            setPatientPos(userGPS);
+          } else {
+            // Last resort: localStorage
+            try {
+              const saved = localStorage.getItem('user_last_location');
+              if (saved) {
+                const p = JSON.parse(saved);
+                if (p?.lat && p?.lng) setPatientPos({ lat: p.lat, lng: p.lng });
+              }
+            } catch {}
+          }
+        }
+
+        // Note: driverPos is NOT pre-set here — we wait for Firebase to give the real value
       } catch {
-        // Fall back to active trip with user's exact detected location
+        // API error — build a fallback booking
         const fallbackBooking = {
           id: id || 'active_trip',
           status: 'En Route',
-          pickupLat: userExactLoc.lat,
-          pickupLng: userExactLoc.lng,
-          pickupAddress: 'Patient Current Location',
           driver: {
             name: 'Assigned Driver',
             phone: '01942809157',
@@ -90,8 +157,12 @@ export default function TrackingPage() {
           },
         };
         setBooking(fallbackBooking);
-        setPatientPos(userExactLoc);
-        setDriverPos(null); // Wait for real Firebase data
+
+        // Try to get user's real GPS for the fallback
+        const userGPS = await getUserCurrentLocation();
+        if (userGPS) {
+          setPatientPos(userGPS);
+        }
       } finally {
         setLoading(false);
       }
@@ -100,77 +171,57 @@ export default function TrackingPage() {
     loadBooking();
   }, [id]);
 
-  // ── Firebase & Socket.io Real-time tracking ──
+  // ── Firebase & Socket.io Real-time driver tracking ──
   useEffect(() => {
     if (!booking) return;
     const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
 
     const handleLocationUpdate = (liveData) => {
-      if (liveData?.lat && liveData?.lng) {
-        setDriverPos({ lat: liveData.lat, lng: liveData.lng });
-        setLiveStreamStatus({
-          active: true,
-          source: liveData.source || 'Firebase Realtime DB',
-          speed: liveData.speed,
-          lastUpdated: new Date(liveData.updatedAt || Date.now()).toLocaleTimeString(),
-        });
+      // FIX: use != null instead of truthiness check (avoids falsy 0 coords)
+      if (liveData && liveData.lat != null && liveData.lng != null) {
+        const lat = Number(liveData.lat);
+        const lng = Number(liveData.lng);
+        if (!isNaN(lat) && !isNaN(lng)) {
+          setDriverPos({ lat, lng });
+          setLiveStreamStatus({
+            active: true,
+            source: liveData.source || 'Firebase Realtime DB',
+            speed: liveData.speed || null,
+            lastUpdated: new Date(liveData.updatedAt || Date.now()).toLocaleTimeString(),
+          });
 
-        if (liveData.status) {
-          setBooking((prev) => (prev ? { ...prev, status: liveData.status } : prev));
+          if (liveData.status) {
+            setBooking((prev) => (prev ? { ...prev, status: liveData.status } : prev));
+          }
         }
       }
     };
 
-    // 1. Subscribe to Firebase RTDB — always listen to active_trip (where driver writes)
-    //    Also listen to the specific booking ID path as fallback
-    const cleanups = [];
-
-    if (rtdb) {
-      const paths = ['live_tracking/active_trip'];
-      // Also subscribe by booking id if it's not 'active_trip'
-      if (id && id !== 'active_trip') {
-        paths.push(`live_tracking/${id}`);
-      }
-
-      paths.forEach((path) => {
-        try {
-          const locRef = ref(rtdb, path);
-          onValue(locRef, (snapshot) => {
-            const val = snapshot.val();
-            if (val && typeof val.lat === 'number' && typeof val.lng === 'number') {
-              handleLocationUpdate(val);
-            }
-          });
-          cleanups.push(() => off(locRef));
-        } catch (e) {
-          console.warn('Firebase subscribe error:', e.message);
-        }
-      });
-    }
+    // 1. Subscribe to Firebase Realtime stream
+    const unsubscribeFirebase = subscribeToAmbulanceLocation(id, handleLocationUpdate);
 
     // 2. Socket.io fallback
     try {
-      const socket = io(process.env.NEXT_PUBLIC_SOCKET_URL || 'http://localhost:5000', {
+      socketRef.current = io(process.env.NEXT_PUBLIC_SOCKET_URL || 'http://localhost:5000', {
         auth: { token },
         transports: ['websocket'],
+        reconnectionAttempts: 3,
       });
-      socketRef.current = socket;
 
-      socket.emit('join_booking', id);
+      socketRef.current.emit('join_booking', id);
 
-      socket.on('location_update', ({ lat, lng, speed }) => {
+      socketRef.current.on('location_update', ({ lat, lng, speed }) => {
         handleLocationUpdate({ lat, lng, speed, source: 'Socket.io Server' });
       });
 
-      socket.on('booking_status_update', ({ status }) => {
+      socketRef.current.on('booking_status_update', ({ status }) => {
         setBooking((prev) => ({ ...prev, status }));
       });
-
-      cleanups.push(() => socket.disconnect());
     } catch {}
 
     return () => {
-      cleanups.forEach((fn) => { try { fn(); } catch {} });
+      unsubscribeFirebase();
+      socketRef.current?.disconnect();
     };
   }, [booking, id]);
 
@@ -180,8 +231,8 @@ export default function TrackingPage() {
     : null;
 
   const liveETA = liveDistance
-    ? `${Math.max(1, Math.round((liveDistance / (liveStreamStatus.speed || 35)) * 60))} min`
-    : '3-5 min';
+    ? `${Math.max(1, Math.round((liveDistance / Math.max(liveStreamStatus.speed || 35, 5)) * 60))} min`
+    : '—';
 
   // ── Cancel booking ──
   const handleCancel = async () => {
@@ -219,6 +270,21 @@ export default function TrackingPage() {
 
   const currentStep = STATUS_STEPS.indexOf(booking?.status ?? 'Pending');
 
+  // Map center: prefer midpoint of driver & patient, else driver, else patient, else Dhaka
+  const mapCenter = (() => {
+    if (driverPos && patientPos) {
+      return {
+        pickupLat: patientPos.lat,
+        pickupLng: patientPos.lng,
+        driverLat: driverPos.lat,
+        driverLng: driverPos.lng,
+      };
+    }
+    if (driverPos) return { pickupLat: null, pickupLng: null, driverLat: driverPos.lat, driverLng: driverPos.lng };
+    if (patientPos) return { pickupLat: patientPos.lat, pickupLng: patientPos.lng, driverLat: null, driverLng: null };
+    return { pickupLat: 23.8103, pickupLng: 90.4125, driverLat: null, driverLng: null };
+  })();
+
   return (
     <div className="min-h-screen" style={{ background: 'var(--bg)', color: 'var(--on-surface)' }}>
 
@@ -254,11 +320,13 @@ export default function TrackingPage() {
         <div className="glass-panel px-4 py-3 flex flex-wrap items-center justify-between gap-3 text-xs">
           <div className="flex items-center gap-2">
             <span className="relative flex h-3 w-3">
-              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-              <span className="relative inline-flex rounded-full h-3 w-3 bg-emerald-500"></span>
+              <span className={`animate-ping absolute inline-flex h-full w-full rounded-full opacity-75 ${liveStreamStatus.active ? 'bg-emerald-400' : 'bg-amber-400'}`}></span>
+              <span className={`relative inline-flex rounded-full h-3 w-3 ${liveStreamStatus.active ? 'bg-emerald-500' : 'bg-amber-400'}`}></span>
             </span>
-            <span className="font-semibold text-emerald-600">
-              {liveStreamStatus.active ? `Live Driver GPS Connected (${liveStreamStatus.source})` : 'Listening for Driver Live Location…'}
+            <span className={`font-semibold ${liveStreamStatus.active ? 'text-emerald-600' : 'text-amber-600'}`}>
+              {liveStreamStatus.active
+                ? `🛰️ Live Driver GPS Connected (${liveStreamStatus.source})`
+                : '📡 Listening for Driver Live Location…'}
             </span>
           </div>
 
@@ -268,12 +336,17 @@ export default function TrackingPage() {
                 Ambulance: <strong className="font-mono text-gray-800">{driverPos.lat.toFixed(4)}, {driverPos.lng.toFixed(4)}</strong>
               </span>
             )}
-            {liveDistance !== null && (
+            {patientPos && (
+              <span>
+                Pickup: <strong className="font-mono text-gray-800">{patientPos.lat.toFixed(4)}, {patientPos.lng.toFixed(4)}</strong>
+              </span>
+            )}
+            {liveDistance != null && (
               <span>
                 Distance: <strong className="text-gray-800">{liveDistance.toFixed(1)} km away</strong>
               </span>
             )}
-            {liveStreamStatus.speed !== null && (
+            {liveStreamStatus.speed != null && (
               <span>
                 Speed: <strong className="text-gray-800">{liveStreamStatus.speed} km/h</strong>
               </span>
@@ -294,10 +367,10 @@ export default function TrackingPage() {
           }}
         >
           <MapComponent
-            pickupLat={patientPos?.lat}
-            pickupLng={patientPos?.lng}
-            driverLat={driverPos?.lat}
-            driverLng={driverPos?.lng}
+            pickupLat={mapCenter.pickupLat}
+            pickupLng={mapCenter.pickupLng}
+            driverLat={mapCenter.driverLat}
+            driverLng={mapCenter.driverLng}
           />
         </div>
 
@@ -384,7 +457,11 @@ export default function TrackingPage() {
                   fontWeight: 700, fontSize: '1.1rem',
                 }}
               >
-                Live ETA: {liveETA}
+                {liveDistance != null
+                  ? `ETA: ~${liveETA} (${liveDistance.toFixed(1)} km away)`
+                  : driverPos
+                  ? `Live ETA: ${liveETA}`
+                  : '🕐 Waiting for driver location...'}
               </div>
 
               {/* Call button */}

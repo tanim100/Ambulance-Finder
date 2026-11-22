@@ -78,29 +78,14 @@ export const createUserIcon = () =>
     popupAnchor: [0, -16],
   });
 
-// Auto-recenter only when center changes significantly (avoid jitter)
+// Auto-recenter when center prop changes
 function MapRecenter({ center, zoom }) {
   const map = useMap();
-  const lastCenterRef = useRef(null);
-
   useEffect(() => {
-    if (!center || !Array.isArray(center) || !center[0] || !center[1]) return;
-
-    const [newLat, newLng] = center;
-    const prev = lastCenterRef.current;
-
-    // Only fly if moved more than ~50 meters (0.0005 degrees) to avoid constant re-centering
-    if (prev) {
-      const dist = Math.sqrt(
-        Math.pow(newLat - prev[0], 2) + Math.pow(newLng - prev[1], 2)
-      );
-      if (dist < 0.0005) return;
+    if (center && Array.isArray(center) && center[0] && center[1]) {
+      map.flyTo(center, zoom || map.getZoom() || 15, { duration: 1.0 });
     }
-
-    lastCenterRef.current = center;
-    map.flyTo(center, zoom || map.getZoom() || 15, { duration: 0.8 });
   }, [center, zoom, map]);
-
   return null;
 }
 
@@ -116,32 +101,9 @@ function MapClickHandler({ onLocationSelect }) {
   return null;
 }
 
-// Smoothly moving marker that updates position without re-mounting
-function LiveMarker({ position, icon, popupContent }) {
-  const markerRef = useRef(null);
-
-  useEffect(() => {
-    if (markerRef.current && position) {
-      markerRef.current.setLatLng(position);
-    }
-  }, [position]);
-
-  if (!position || !position[0] || !position[1]) return null;
-
-  return (
-    <Marker
-      position={position}
-      icon={icon}
-      ref={markerRef}
-    >
-      {popupContent && <Popup>{popupContent}</Popup>}
-    </Marker>
-  );
-}
-
 export default function MapView({
   center = [23.8103, 90.4125], // Default: Dhaka
-  zoom = 15,
+  zoom = 14,
   userLocation = null,
   ambulances = [],
   driverLocation = null,
@@ -151,25 +113,15 @@ export default function MapView({
   className = '',
   height = '100%',
 }) {
-  // Ensure we always have valid coordinates for user position
-  const effectiveUserLoc =
-    userLocation && typeof userLocation.lat === 'number'
-      ? userLocation
-      : null;
-
-  const userPos = effectiveUserLoc
-    ? [effectiveUserLoc.lat, effectiveUserLoc.lng]
+  // Only show user pin when explicitly provided — do NOT fall back to center
+  const effectiveUserLoc = userLocation && typeof userLocation.lat === 'number' && typeof userLocation.lng === 'number'
+    ? userLocation
     : null;
-
-  const driverPos =
-    driverLocation && typeof driverLocation.lat === 'number' && typeof driverLocation.lng === 'number'
-      ? [driverLocation.lat, driverLocation.lng]
-      : null;
 
   return (
     <div className={`relative rounded-2xl overflow-hidden ${className}`} style={{ height, width: '100%' }}>
       {/* Global CSS for pulsing location radar */}
-      <style>{`
+      <style jsx global>{`
         @keyframes leaflet-pulse {
           0% { transform: scale(0.6); opacity: 0.9; }
           70% { transform: scale(1.6); opacity: 0; }
@@ -191,23 +143,21 @@ export default function MapView({
         <MapRecenter center={center} zoom={zoom} />
         {onLocationSelect && <MapClickHandler onLocationSelect={onLocationSelect} />}
 
-        {/* User / Patient Location Marker — Blue pulsing dot */}
-        {userPos && (
-          <LiveMarker
-            position={userPos}
+        {/* User / Patient Pickup Location Marker */}
+        {effectiveUserLoc && (
+          <Marker
+            position={[effectiveUserLoc.lat, effectiveUserLoc.lng]}
             icon={createUserIcon()}
-            popupContent={
+          >
+            <Popup>
               <div className="text-center p-1">
-                <p className="font-bold text-sm text-blue-600">📍 Patient Pickup Location</p>
+                <p className="font-bold text-sm text-blue-600">📍 {effectiveUserLoc.label || 'Patient Pickup'}</p>
                 <p className="text-xs text-gray-500 font-mono mt-0.5">
-                  {effectiveUserLoc.lat.toFixed(5)}, {effectiveUserLoc.lng.toFixed(5)}
+                  {effectiveUserLoc.lat.toFixed(4)}, {effectiveUserLoc.lng.toFixed(4)}
                 </p>
-                {effectiveUserLoc.label && (
-                  <p className="text-[11px] text-gray-400 mt-0.5">{effectiveUserLoc.label}</p>
-                )}
               </div>
-            }
-          />
+            </Popup>
+          </Marker>
         )}
 
         {/* Nearby Ambulance markers */}
@@ -236,16 +186,17 @@ export default function MapView({
           </Marker>
         ))}
 
-        {/* Assigned Driver Live Marker — Red ambulance icon, smooth position update */}
-        {driverPos && (
-          <LiveMarker
-            position={driverPos}
+        {/* Assigned Driver Live Marker */}
+        {driverLocation && typeof driverLocation.lat === 'number' && typeof driverLocation.lng === 'number' && (
+          <Marker
+            position={[driverLocation.lat, driverLocation.lng]}
             icon={createAmbulanceIcon('En Route')}
-            popupContent={
+          >
+            <Popup>
               <div className="text-center p-1">
                 <p className="font-bold text-sm text-red-600">🚑 Ambulance Live Location</p>
                 <p className="text-xs text-gray-600 font-mono mt-0.5">
-                  Lat: {driverLocation.lat.toFixed(5)}, Lng: {driverLocation.lng.toFixed(5)}
+                  Lat: {driverLocation.lat.toFixed(4)}, Lng: {driverLocation.lng.toFixed(4)}
                 </p>
                 {driverLocation.speed && (
                   <p className="text-[11px] text-emerald-600 font-semibold mt-0.5">
@@ -253,8 +204,8 @@ export default function MapView({
                   </p>
                 )}
               </div>
-            }
-          />
+            </Popup>
+          </Marker>
         )}
 
         {/* Route polyline */}
