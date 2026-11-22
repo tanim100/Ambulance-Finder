@@ -4,7 +4,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import dynamic from 'next/dynamic';
-import { MapPin, ArrowLeft, CheckCircle, Navigation, Map, Search, X, Loader2, Sparkles } from 'lucide-react';
+import { MapPin, ArrowLeft, CheckCircle, Navigation, Map, Search, X, Loader2, Sparkles, Building2, Hospital, Phone, ShieldCheck, ChevronDown, Check, Info } from 'lucide-react';
 import Navbar from '@/components/layout/Navbar';
 import BottomNav from '@/components/layout/BottomNav';
 import Input from '@/components/ui/Input';
@@ -42,6 +42,153 @@ const PRESET_LOCATIONS = [
   { label: '🏙️ Gulshan 2', address: 'Gulshan 2 Circle, Gulshan, Dhaka', lat: 23.7925, lng: 90.4172 },
 ];
 
+export const TOP_HOSPITALS = [
+  {
+    id: 'dmch',
+    name: 'Dhaka Medical College & Hospital (DMCH)',
+    shortName: 'Dhaka Medical (DMCH)',
+    area: 'Secretariate Rd, Shahbagh, Dhaka',
+    type: 'Government Super-Specialized',
+    emergency: '24/7 Level-1 Trauma, Burn Unit & CCU',
+    hotline: '01711-234567',
+    phone: '02-55165555',
+    icon: '🏥',
+    popular: true,
+  },
+  {
+    id: 'square',
+    name: 'Square Hospitals Ltd.',
+    shortName: 'Square Hospital',
+    area: '18/F Panthapath, Dhaka',
+    type: 'Private Tertiary Care',
+    emergency: '24/7 Emergency, Stroke & Cardiac Center',
+    hotline: '10616',
+    phone: '01713-377775',
+    icon: '🏥',
+    popular: true,
+  },
+  {
+    id: 'evercare',
+    name: 'Evercare Hospital Dhaka',
+    shortName: 'Evercare Hospital',
+    area: 'Plot 81, Block E, Bashundhara R/A, Dhaka',
+    type: 'Private Multi-Disciplinary',
+    emergency: 'JCI Accredited, 24/7 Critical Care & Trauma',
+    hotline: '10678',
+    phone: '09666710678',
+    icon: '🏥',
+    popular: true,
+  },
+  {
+    id: 'united',
+    name: 'United Hospital Gulshan',
+    shortName: 'United Hospital',
+    area: 'Plot 15, Road 71, Gulshan 2, Dhaka',
+    type: 'Private Specialized',
+    emergency: '24/7 Comprehensive Cardiac & ER Care',
+    hotline: '10666',
+    phone: '01914-001234',
+    icon: '🏥',
+    popular: true,
+  },
+  {
+    id: 'bsmmu',
+    name: 'Bangabandhu Sheikh Mujib Medical University (BSMMU)',
+    shortName: 'BSMMU (PG Hospital)',
+    area: 'Shahbagh, Dhaka',
+    type: 'Public Medical University',
+    emergency: 'Super-Specialized Research & Emergency ICU',
+    hotline: '01712-987654',
+    phone: '02-9661051',
+    icon: '🏥',
+    popular: true,
+  },
+  {
+    id: 'birdem',
+    name: 'BIRDEM General Hospital',
+    shortName: 'BIRDEM Hospital',
+    area: '122 Kazi Nazrul Islam Ave, Shahbagh, Dhaka',
+    type: 'Specialized Endocrine & General',
+    emergency: '24/7 ICU, Nephrology & Emergency Triage',
+    hotline: '10615',
+    phone: '02-9661551',
+    icon: '🏥',
+    popular: true,
+  },
+  {
+    id: 'nicvd',
+    name: 'National Institute of Cardiovascular Diseases (NICVD)',
+    shortName: 'NICVD (National Heart)',
+    area: 'Sher-e-Bangla Nagar, Dhaka',
+    type: 'National Apex Cardiac Center',
+    emergency: 'National Emergency Cardiac Cath-Lab & CCU',
+    hotline: '01715-667788',
+    phone: '02-9122560',
+    icon: '❤️',
+    popular: true,
+  },
+  {
+    id: 'nitor',
+    name: 'National Institute of Traumatology & Orthopaedics (NITOR)',
+    shortName: 'NITOR (Pongu / Trauma)',
+    area: 'Sher-e-Bangla Nagar, Dhaka',
+    type: 'Apex Orthopedic & Trauma Center',
+    emergency: '24/7 Emergency Bone & Polytrauma Surgery',
+    hotline: '02-9114075',
+    phone: '02-9114075',
+    icon: '🩹',
+    popular: true,
+  },
+  {
+    id: 'kurmitola',
+    name: 'Kurmitola General Hospital',
+    shortName: 'Kurmitola General',
+    area: 'Dhaka-Mymensingh Rd, Dhaka Cantonment',
+    type: 'Government General Hospital',
+    emergency: '24/7 Acute Trauma & General Emergency Care',
+    hotline: '01769-010200',
+    phone: '02-55067201',
+    icon: '🏥',
+    popular: false,
+  },
+  {
+    id: 'shishu',
+    name: 'Dhaka Shishu (Children) Hospital',
+    shortName: 'Dhaka Shishu Hospital',
+    area: 'Sher-e-Bangla Nagar, Dhaka',
+    type: 'Specialized Pediatric Emergency',
+    emergency: '24/7 Pediatric Emergency & Neonatal ICU',
+    hotline: '02-58153401',
+    phone: '02-58153401',
+    icon: '👶',
+    popular: false,
+  },
+  {
+    id: 'labaid',
+    name: 'Labaid Specialized Hospital',
+    shortName: 'Labaid Hospital',
+    area: 'House 6, Road 4, Dhanmondi, Dhaka',
+    type: 'Private Specialized Cardiac',
+    emergency: '24/7 Cardiac Emergency Unit & CCU',
+    hotline: '10606',
+    phone: '02-9676356',
+    icon: '🏥',
+    popular: false,
+  },
+  {
+    id: 'ibnsina',
+    name: 'Ibn Sina Specialized Hospital',
+    shortName: 'Ibn Sina Hospital',
+    area: 'House 68, Road 15/A, Dhanmondi, Dhaka',
+    type: 'Private Multi-Disciplinary',
+    emergency: '24/7 Emergency, Stroke & Trauma Care',
+    hotline: '10615',
+    phone: '02-9126625',
+    icon: '🏥',
+    popular: false,
+  },
+];
+
 export default function RequestPage() {
   const router = useRouter();
   const { location: currentGeoLoc, getLocation, loading: geoLoading } = useGeolocation();
@@ -64,8 +211,53 @@ export default function RequestPage() {
   const [loading, setLoading] = useState(false);
   const [submitted, setSubmitted] = useState(false);
   const [bookingId, setBookingId] = useState(null);
+  const [showHospitalDropdown, setShowHospitalDropdown] = useState(false);
+  const [showHospitalModal, setShowHospitalModal] = useState(false);
+  const destinationRef = useRef(null);
 
   const searchDebounceRef = useRef(null);
+
+  // Close hospital dropdown on outside click
+  useEffect(() => {
+    const handleClickOutside = (e) => {
+      if (destinationRef.current && !destinationRef.current.contains(e.target)) {
+        setShowHospitalDropdown(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  const selectHospital = (hospital) => {
+    if (!hospital) {
+      setForm((p) => ({ ...p, destination: '' }));
+    } else {
+      setForm((p) => ({ ...p, destination: hospital.name }));
+    }
+    setShowHospitalDropdown(false);
+    setShowHospitalModal(false);
+  };
+
+  // Find matched hospital object if any
+  const matchedHospital = TOP_HOSPITALS.find(
+    (h) =>
+      form.destination.trim() &&
+      (h.name.toLowerCase() === form.destination.trim().toLowerCase() ||
+        h.shortName.toLowerCase() === form.destination.trim().toLowerCase() ||
+        form.destination.toLowerCase().includes(h.shortName.toLowerCase()) ||
+        (form.destination.length > 5 && h.name.toLowerCase().includes(form.destination.toLowerCase())))
+  );
+
+  // Filtered hospitals based on user search
+  const filteredHospitals = form.destination.trim()
+    ? TOP_HOSPITALS.filter(
+        (h) =>
+          h.name.toLowerCase().includes(form.destination.toLowerCase()) ||
+          h.shortName.toLowerCase().includes(form.destination.toLowerCase()) ||
+          h.area.toLowerCase().includes(form.destination.toLowerCase()) ||
+          h.emergency.toLowerCase().includes(form.destination.toLowerCase())
+      )
+    : TOP_HOSPITALS;
 
   // Pre-fill destination if passed via URL parameter (e.g., from hospital cards)
   useEffect(() => {
@@ -173,9 +365,9 @@ export default function RequestPage() {
     } catch {}
   };
 
-  // High-accuracy live device GPS
+  // High-accuracy live device GPS with fallback to WiFi/Network
   const handleDetectLiveGPS = () => {
-    if (navigator.geolocation) {
+    if (navigator?.geolocation) {
       setGeocodingLoading(true);
       navigator.geolocation.getCurrentPosition(
         (pos) => {
@@ -183,15 +375,43 @@ export default function RequestPage() {
           const lng = pos.coords.longitude;
           setPickupCoords({ lat, lng });
           reverseGeocode(lat, lng);
+          // Immediately sync with Firebase live_tracking/user and active_trip
+          updatePatientLocation('active_trip', {
+            lat,
+            lng,
+            address: form.pickupLocation || 'Live GPS Location',
+          });
           try {
             localStorage.setItem('user_last_location', JSON.stringify({ lat, lng, label: 'Your Exact GPS Location' }));
           } catch {}
-        },
-        () => {
-          getLocation();
           setGeocodingLoading(false);
         },
-        { enableHighAccuracy: true, timeout: 8000 }
+        (err) => {
+          // Low accuracy network/WiFi fallback
+          navigator.geolocation.getCurrentPosition(
+            (pos) => {
+              const lat = pos.coords.latitude;
+              const lng = pos.coords.longitude;
+              setPickupCoords({ lat, lng });
+              reverseGeocode(lat, lng);
+              updatePatientLocation('active_trip', {
+                lat,
+                lng,
+                address: form.pickupLocation || 'Network Location',
+              });
+              try {
+                localStorage.setItem('user_last_location', JSON.stringify({ lat, lng, label: 'Network Location' }));
+              } catch {}
+              setGeocodingLoading(false);
+            },
+            () => {
+              getLocation();
+              setGeocodingLoading(false);
+            },
+            { enableHighAccuracy: false, timeout: 8000, maximumAge: 0 }
+          );
+        },
+        { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
       );
     } else {
       getLocation();
@@ -202,6 +422,11 @@ export default function RequestPage() {
   const handleMapPin = (coords) => {
     setPickupCoords(coords);
     reverseGeocode(coords.lat, coords.lng);
+    updatePatientLocation('active_trip', {
+      lat: coords.lat,
+      lng: coords.lng,
+      address: 'Pinned on Map',
+    });
   };
 
   const validate = () => {
@@ -293,8 +518,11 @@ export default function RequestPage() {
             <div className="bg-primary-50 border border-primary-200 rounded-2xl p-4 mb-6 text-left">
               <p className="text-xs text-gray-500 mb-1">Booking Reference</p>
               <p className="font-bold text-primary-700 text-sm break-all">{bookingId}</p>
-              <p className="text-xs text-gray-700 mt-2 font-medium">📍 {form.pickupLocation}</p>
-              <p className="text-[11px] text-gray-400 mt-0.5 font-mono">
+              <p className="text-xs text-gray-700 mt-2 font-medium">📍 Pickup: {form.pickupLocation}</p>
+              <p className="text-xs text-emerald-700 mt-1 font-semibold flex items-center gap-1">
+                🏥 Destination: {form.destination || 'Nearest Emergency Hospital (Auto-Triage)'}
+              </p>
+              <p className="text-[11px] text-gray-400 mt-1 font-mono">
                 Coordinates: {pickupCoords.lat.toFixed(4)}, {pickupCoords.lng.toFixed(4)}
               </p>
             </div>
@@ -498,13 +726,204 @@ export default function RequestPage() {
               )}
             </div>
 
-            <Input
-              label="Destination Hospital / Address (Optional)"
-              name="destination"
-              placeholder="e.g. Dhaka Medical College, Square Hospital, or leave blank"
-              value={form.destination}
-              onChange={handleChange}
-            />
+            {/* ── UPGRADED DESTINATION HOSPITAL SECTION ── */}
+            <div ref={destinationRef} className="pt-2 border-t border-gray-100">
+              <div className="flex items-center justify-between mb-1.5">
+                <label className="text-sm font-semibold text-gray-700 flex items-center gap-1.5">
+                  <Building2 size={16} className="text-emerald-600" />
+                  Destination Hospital / Address
+                  <span className="text-[11px] font-normal text-gray-400 bg-gray-100 px-2 py-0.5 rounded-full">
+                    Optional
+                  </span>
+                </label>
+                <button
+                  type="button"
+                  onClick={() => setShowHospitalModal(true)}
+                  className="text-xs text-emerald-600 hover:text-emerald-700 font-semibold flex items-center gap-1 bg-emerald-50 hover:bg-emerald-100 px-2.5 py-1 rounded-lg border border-emerald-100 transition-all active:scale-95"
+                >
+                  <Hospital size={12} />
+                  <span>Browse Hospitals ({TOP_HOSPITALS.length})</span>
+                </button>
+              </div>
+
+              {/* Quick Hospital Preset Chips */}
+              <div className="flex items-center gap-1.5 overflow-x-auto pb-2 scrollbar-hide">
+                <button
+                  type="button"
+                  onClick={() => selectHospital(null)}
+                  className={`shrink-0 text-[11px] font-medium px-2.5 py-1 rounded-lg border transition-all active:scale-95 ${
+                    !form.destination
+                      ? 'bg-emerald-600 text-white border-emerald-600 shadow-sm'
+                      : 'bg-gray-50 hover:bg-gray-100 text-gray-600 border-gray-200'
+                  }`}
+                >
+                  🚑 Nearest Emergency ER (Auto)
+                </button>
+                {TOP_HOSPITALS.filter((h) => h.popular).map((h) => {
+                  const isSelected = form.destination === h.name;
+                  return (
+                    <button
+                      key={h.id}
+                      type="button"
+                      onClick={() => selectHospital(h)}
+                      className={`shrink-0 text-[11px] font-medium px-2.5 py-1 rounded-lg border transition-all active:scale-95 ${
+                        isSelected
+                          ? 'bg-emerald-600 text-white border-emerald-600 shadow-sm font-bold'
+                          : 'bg-gray-50 hover:bg-emerald-50 text-gray-700 border-gray-200 hover:border-emerald-200'
+                      }`}
+                    >
+                      {h.icon} {h.shortName}
+                    </button>
+                  );
+                })}
+              </div>
+
+              {/* Main Hospital Input with Dropdown */}
+              <div className="relative">
+                <input
+                  type="text"
+                  name="destination"
+                  placeholder="e.g. Dhaka Medical College, Square Hospital, or search area..."
+                  value={form.destination}
+                  onFocus={() => setShowHospitalDropdown(true)}
+                  onChange={(e) => {
+                    handleChange(e);
+                    setShowHospitalDropdown(true);
+                  }}
+                  className="w-full pl-10 pr-16 py-3 rounded-xl border border-gray-200 text-sm transition-all focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500"
+                />
+                <Building2 size={17} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-emerald-600 pointer-events-none" />
+
+                <div className="absolute right-2.5 top-1/2 -translate-y-1/2 flex items-center gap-1">
+                  {form.destination && (
+                    <button
+                      type="button"
+                      onClick={() => selectHospital(null)}
+                      className="p-1 text-gray-400 hover:text-gray-600 rounded-full hover:bg-gray-100 transition-colors"
+                      title="Clear destination"
+                    >
+                      <X size={14} />
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => setShowHospitalDropdown((v) => !v)}
+                    className="p-1 text-gray-400 hover:text-gray-600 rounded-lg hover:bg-gray-100 transition-colors"
+                  >
+                    <ChevronDown size={16} className={`transition-transform duration-200 ${showHospitalDropdown ? 'rotate-180 text-emerald-600' : ''}`} />
+                  </button>
+                </div>
+
+                {/* Dropdown Menu */}
+                {showHospitalDropdown && (
+                  <div className="absolute left-0 right-0 top-full mt-1.5 bg-white rounded-2xl shadow-2xl border border-gray-100 z-50 overflow-hidden divide-y divide-gray-100 max-h-72 overflow-y-auto">
+                    {/* Auto-triage Option */}
+                    <div
+                      onClick={() => selectHospital(null)}
+                      className={`p-3 cursor-pointer flex items-center justify-between text-xs transition-colors ${
+                        !form.destination ? 'bg-emerald-50/70 font-semibold text-emerald-800' : 'hover:bg-gray-50 text-gray-700'
+                      }`}
+                    >
+                      <div className="flex items-center gap-2.5">
+                        <span className="text-base">🚑</span>
+                        <div>
+                          <p className="font-bold text-gray-900">Auto-Route to Nearest Emergency Hospital</p>
+                          <p className="text-[11px] text-gray-500">Recommended for urgent triage — Driver chooses quickest route</p>
+                        </div>
+                      </div>
+                      {!form.destination && <Check size={16} className="text-emerald-600 shrink-0" />}
+                    </div>
+
+                    {/* Hospital List Items */}
+                    {filteredHospitals.map((h) => {
+                      const isSelected = form.destination === h.name;
+                      return (
+                        <div
+                          key={h.id}
+                          onClick={() => selectHospital(h)}
+                          className={`p-3 cursor-pointer flex items-start justify-between gap-3 text-xs transition-colors ${
+                            isSelected ? 'bg-emerald-50 font-semibold text-emerald-900' : 'hover:bg-gray-50 text-gray-700'
+                          }`}
+                        >
+                          <div className="flex items-start gap-2.5 min-w-0">
+                            <span className="text-base shrink-0 mt-0.5">{h.icon}</span>
+                            <div className="min-w-0">
+                              <p className="font-bold text-gray-900 truncate">{h.name}</p>
+                              <p className="text-[11px] text-gray-500 truncate">📍 {h.area}</p>
+                              <p className="text-[11px] text-emerald-700 font-medium mt-0.5">⚡ {h.emergency}</p>
+                            </div>
+                          </div>
+                          <div className="shrink-0 text-right">
+                            <span className="inline-block text-[10px] font-semibold bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full mb-1">
+                              {h.type.includes('Gov') ? 'Govt' : 'Private'}
+                            </span>
+                            {isSelected && <Check size={16} className="text-emerald-600 ml-auto" />}
+                          </div>
+                        </div>
+                      );
+                    })}
+
+                    {filteredHospitals.length === 0 && (
+                      <div className="p-4 text-center text-xs text-gray-500">
+                        <p>No predefined hospitals matching &quot;{form.destination}&quot;</p>
+                        <p className="text-[11px] text-gray-400 mt-1">You can still type any custom address or hospital name.</p>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+
+              {/* Selected Hospital Highlight Card */}
+              {matchedHospital ? (
+                <div className="mt-2.5 p-3 rounded-xl bg-emerald-50/80 border border-emerald-200 flex items-start justify-between gap-3 text-xs">
+                  <div className="flex items-start gap-2.5">
+                    <span className="text-xl shrink-0 mt-0.5">{matchedHospital.icon}</span>
+                    <div>
+                      <div className="flex items-center gap-1.5">
+                        <span className="font-bold text-emerald-900">{matchedHospital.name}</span>
+                        <span className="text-[10px] font-semibold bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded-full">
+                          Verified Destination
+                        </span>
+                      </div>
+                      <p className="text-gray-600 text-[11px] mt-0.5">📍 {matchedHospital.area}</p>
+                      <p className="text-emerald-700 font-medium text-[11px] mt-0.5">🚨 {matchedHospital.emergency}</p>
+                      {matchedHospital.hotline && (
+                        <p className="text-gray-500 text-[11px] mt-0.5 flex items-center gap-1">
+                          <Phone size={10} className="text-emerald-600" />
+                          <span>Emergency Hotline: <strong>{matchedHospital.hotline}</strong></span>
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => selectHospital(null)}
+                    className="text-gray-400 hover:text-red-500 p-1 shrink-0"
+                    title="Change hospital"
+                  >
+                    <X size={15} />
+                  </button>
+                </div>
+              ) : form.destination ? (
+                <div className="mt-2 flex items-center justify-between text-xs text-gray-500 bg-gray-50 px-3 py-1.5 rounded-lg border border-gray-100">
+                  <span className="truncate">Destination set to: <strong className="text-gray-800">{form.destination}</strong></span>
+                  <button
+                    type="button"
+                    onClick={() => selectHospital(null)}
+                    className="text-red-500 text-[11px] font-semibold ml-2 hover:underline shrink-0"
+                  >
+                    Clear
+                  </button>
+                </div>
+              ) : (
+                <p className="mt-2 text-[11px] text-gray-500 flex items-center gap-1.5 bg-slate-50 px-3 py-1.5 rounded-lg border border-slate-100">
+                  <Info size={12} className="text-blue-500 shrink-0" />
+                  <span>
+                    <strong>Optional:</strong> If left blank, driver will auto-navigate to the nearest capable emergency triage hospital.
+                  </span>
+                </p>
+              )}
+            </div>
           </div>
 
           {/* Ambulance selector */}
@@ -548,6 +967,119 @@ export default function RequestPage() {
           </Button>
         </form>
       </div>
+
+      {/* ── BROWSE ALL HOSPITALS MODAL ── */}
+      {showHospitalModal && (
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl max-w-lg w-full max-h-[85vh] flex flex-col shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+            {/* Modal Header */}
+            <div className="p-5 border-b border-gray-100 flex items-center justify-between bg-emerald-50/50">
+              <div className="flex items-center gap-2.5">
+                <div className="w-10 h-10 rounded-2xl bg-emerald-100 text-emerald-700 flex items-center justify-center text-xl">
+                  🏥
+                </div>
+                <div>
+                  <h3 className="font-bold text-gray-900 text-base">Connected Emergency Hospitals</h3>
+                  <p className="text-xs text-gray-500">Select destination for emergency triage</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowHospitalModal(false)}
+                className="w-8 h-8 rounded-full bg-gray-100 hover:bg-gray-200 flex items-center justify-center text-gray-500 hover:text-gray-700 transition-colors"
+              >
+                <X size={16} />
+              </button>
+            </div>
+
+            {/* Quick Auto-Triage Option */}
+            <div className="p-4 bg-emerald-50/30 border-b border-gray-100">
+              <button
+                type="button"
+                onClick={() => selectHospital(null)}
+                className="w-full text-left p-3 rounded-2xl bg-white border-2 border-emerald-500 hover:bg-emerald-50/50 transition-all shadow-sm flex items-center justify-between"
+              >
+                <div className="flex items-center gap-3">
+                  <span className="text-2xl">🚑</span>
+                  <div>
+                    <p className="font-bold text-emerald-900 text-sm">Auto-Route to Nearest Hospital</p>
+                    <p className="text-xs text-gray-500">Dispatch system dynamically chooses the nearest capable emergency triage hospital</p>
+                  </div>
+                </div>
+                <span className="text-xs font-bold text-emerald-700 bg-emerald-100 px-2.5 py-1 rounded-lg shrink-0">
+                  Recommended
+                </span>
+              </button>
+            </div>
+
+            {/* Hospital Directory List */}
+            <div className="flex-1 overflow-y-auto p-4 space-y-2.5 divide-y divide-gray-50">
+              {TOP_HOSPITALS.map((h) => {
+                const isSelected = form.destination === h.name;
+                return (
+                  <div
+                    key={h.id}
+                    onClick={() => selectHospital(h)}
+                    className={`pt-2.5 first:pt-0 p-3 rounded-2xl border transition-all cursor-pointer flex items-start justify-between gap-3 ${
+                      isSelected
+                        ? 'border-emerald-500 bg-emerald-50/60 shadow-sm'
+                        : 'border-gray-100 bg-white hover:border-emerald-200 hover:bg-gray-50/80'
+                    }`}
+                  >
+                    <div className="flex items-start gap-3 min-w-0">
+                      <span className="text-2xl mt-0.5 shrink-0">{h.icon}</span>
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <p className="font-bold text-gray-900 text-sm">{h.name}</p>
+                          <span className="text-[10px] font-semibold bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full">
+                            {h.type}
+                          </span>
+                        </div>
+                        <p className="text-xs text-gray-500 mt-0.5">📍 {h.area}</p>
+                        <p className="text-xs text-emerald-700 font-medium mt-1">🚨 {h.emergency}</p>
+                        {h.hotline && (
+                          <p className="text-[11px] text-gray-400 mt-1 flex items-center gap-1">
+                            <Phone size={10} className="text-emerald-600" />
+                            <span>Hotline: <strong>{h.hotline}</strong></span>
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                    <div className="shrink-0 pt-1">
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          selectHospital(h);
+                        }}
+                        className={`text-xs font-semibold px-3 py-1.5 rounded-xl transition-all ${
+                          isSelected
+                            ? 'bg-emerald-600 text-white'
+                            : 'bg-emerald-50 text-emerald-700 hover:bg-emerald-100'
+                        }`}
+                      >
+                        {isSelected ? 'Selected' : 'Select'}
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* Modal Footer */}
+            <div className="p-4 border-t border-gray-100 bg-gray-50 flex items-center justify-between text-xs text-gray-500">
+              <span>{TOP_HOSPITALS.length} major hospitals connected with 24/7 ER units</span>
+              <button
+                type="button"
+                onClick={() => setShowHospitalModal(false)}
+                className="font-semibold text-gray-700 hover:text-gray-900"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       <BottomNav />
     </div>

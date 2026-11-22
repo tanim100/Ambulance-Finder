@@ -6,7 +6,7 @@ import dynamic from 'next/dynamic';
 import Link from 'next/link';
 import { bookingAPI } from '@/lib/api';
 import io from 'socket.io-client';
-import { subscribeToAmbulanceLocation } from '@/lib/firebaseTracking';
+import { subscribeToAmbulanceLocation, updatePatientLocation } from '@/lib/firebaseTracking';
 
 // Leaflet map — no SSR
 const MapComponent = dynamic(() => import('@/components/map/MapComponent'), { ssr: false });
@@ -82,6 +82,7 @@ export default function TrackingPage() {
       getUserCurrentLocation().then((loc) => {
         if (loc) {
           setUserCurrentPos(loc);
+          updatePatientLocation(id || 'active_trip', { lat: loc.lat, lng: loc.lng, address: 'Live User GPS' });
           try { localStorage.setItem('user_last_location', JSON.stringify(loc)); } catch {}
         }
       });
@@ -91,6 +92,7 @@ export default function TrackingPage() {
         (pos) => {
           const loc = { lat: pos.coords.latitude, lng: pos.coords.longitude };
           setUserCurrentPos(loc);
+          updatePatientLocation(id || 'active_trip', { lat: loc.lat, lng: loc.lng, address: 'Live User GPS' });
           try { localStorage.setItem('user_last_location', JSON.stringify(loc)); } catch {}
         },
         () => {},
@@ -315,6 +317,37 @@ export default function TrackingPage() {
       </header>
 
       <div className="max-w-5xl mx-auto px-4 py-6 grid gap-6" style={{ gridTemplateColumns: '1fr' }}>
+
+        {/* ── Route & Destination Hospital Card ── */}
+        <div className="glass-panel p-4 rounded-2xl flex flex-col md:flex-row md:items-center justify-between gap-4 border border-gray-100 shadow-sm bg-white dark:bg-slate-900">
+          <div className="flex items-start gap-3 min-w-0">
+            <div className="w-10 h-10 rounded-2xl bg-rose-50 text-rose-600 dark:bg-rose-950/40 dark:text-rose-400 flex items-center justify-center shrink-0 text-lg">
+              📍
+            </div>
+            <div className="min-w-0">
+              <p className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">Pickup Location</p>
+              <p className="text-sm font-bold text-gray-900 dark:text-gray-100 truncate">
+                {booking?.pickupAddress || booking?.pickupLocation?.address || 'Patient Pickup Location'}
+              </p>
+            </div>
+          </div>
+
+          <div className="hidden md:flex items-center text-gray-300 dark:text-gray-600 px-2">
+            ➔
+          </div>
+
+          <div className="flex items-start gap-3 min-w-0">
+            <div className="w-10 h-10 rounded-2xl bg-emerald-50 text-emerald-600 dark:bg-emerald-950/40 dark:text-emerald-400 flex items-center justify-center shrink-0 text-lg">
+              🏥
+            </div>
+            <div className="min-w-0">
+              <p className="text-[11px] font-bold text-emerald-600 dark:text-emerald-400 uppercase tracking-wider">Destination Hospital</p>
+              <p className="text-sm font-bold text-emerald-800 dark:text-emerald-300 truncate">
+                {booking?.destinationAddress || booking?.destinationLocation?.address || booking?.destination || 'Nearest General Hospital (Auto-Triage)'}
+              </p>
+            </div>
+          </div>
+        </div>
 
         {/* Live GPS Status Bar */}
         <div className="glass-panel px-4 py-3 flex flex-wrap items-center justify-between gap-3 text-xs">

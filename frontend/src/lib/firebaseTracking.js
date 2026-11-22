@@ -1,7 +1,7 @@
 // src/lib/firebaseTracking.js — Robust Two-Way Live Ambulance & Patient Location Service via Firebase RTDB + Firestore
 import { rtdb, db, isConfigured } from './firebase';
-import { ref, set, onValue, off, serverTimestamp, get } from 'firebase/database';
-import { doc, setDoc, onSnapshot } from 'firebase/firestore';
+import { ref, set, update, onValue, off, serverTimestamp, get } from 'firebase/database';
+import { doc, setDoc } from 'firebase/firestore';
 
 // In-browser BroadcastChannel for zero-latency local tab synchronization
 const hasBroadcast = typeof window !== 'undefined' && 'BroadcastChannel' in window;
@@ -44,19 +44,25 @@ export async function updateAmbulanceLocation(bookingId, coords) {
 
   let rtdbSuccess = false;
 
-  // 2. Realtime Database — Write to specific booking, active_trip, and latest
+  // 2. Realtime Database — Write with update() so patient child is NOT wiped out!
   if (rtdb) {
     try {
-      const updates = {};
-      if (bookingId && bookingId !== 'active_trip') {
-        updates[`live_tracking/${bookingId}`] = { ...payload, serverTime: serverTimestamp() };
-      }
-      updates['live_tracking/active_trip'] = { ...payload, serverTime: serverTimestamp() };
-      updates['live_tracking/latest'] = { ...payload, serverTime: serverTimestamp() };
+      const dbPayload = { ...payload, serverTime: serverTimestamp() };
 
-      await Promise.all(
-        Object.entries(updates).map(([path, data]) => set(ref(rtdb, path), data))
-      );
+      // Update active_trip without deleting patient node
+      await update(ref(rtdb, 'live_tracking/active_trip'), dbPayload);
+
+      // Dedicated driver node for direct visibility in Firebase Console
+      await set(ref(rtdb, 'live_tracking/driver'), dbPayload);
+
+      // Latest pointer
+      await update(ref(rtdb, 'live_tracking/latest'), dbPayload);
+
+      // Specific booking node if different
+      if (bookingId && bookingId !== 'active_trip') {
+        await update(ref(rtdb, `live_tracking/${bookingId}`), dbPayload);
+      }
+
       rtdbSuccess = true;
     } catch (err) {
       console.warn('Firebase RTDB update error:', err.message);
@@ -76,42 +82,64 @@ export async function updateAmbulanceLocation(bookingId, coords) {
   return {
     success: true,
     payload,
+    provider: rtdbSuccess ? 'Firebase RTDB' : 'Local Fallback',
   };
 }
 
 /**
- * Patient writes exact pickup location to Firebase
+ * Patient / User writes exact location to Firebase
  * @param {string} bookingId - The booking ID
  * @param {object} coords - { lat, lng, address }
  */
 export async function updatePatientLocation(bookingId, coords) {
-  if (!coords || typeof coords.lat !== 'number' || typeof coords.lng !== 'number') return;
+  if (!coords) return { success: false, reason: 'missing-coords' };
+
+  const lat = Number(coords.lat);
+  const lng = Number(coords.lng);
+
+  if (isNaN(lat) || isNaN(lng)) return { success: false, reason: 'invalid-coords' };
 
   const payload = {
-    patientLat: coords.lat,
-    patientLng: coords.lng,
+    patientLat: lat,
+    patientLng: lng,
+    lat,
+    lng,
     pickupAddress: coords.address || 'Patient Current Location',
+    bookingId: String(bookingId || 'active_trip'),
     updatedAt: Date.now(),
   };
-
-  if (rtdb) {
-    try {
-      if (bookingId && bookingId !== 'active_trip') {
-        await set(ref(rtdb, `live_tracking/${bookingId}/patient`), payload);
-      }
-      await set(ref(rtdb, 'live_tracking/active_trip/patient'), payload);
-    } catch {}
-  }
 
   if (localChannel) {
     try {
       localChannel.postMessage({ type: 'patient_location', ...payload });
     } catch {}
   }
+
+  if (rtdb) {
+    try {
+      // 1. Write under active_trip/patient
+      await set(ref(rtdb, 'live_tracking/active_trip/patient'), payload);
+
+      // 2. Direct top-level user & patient nodes for crystal-clear Firebase Console visibility
+      await set(ref(rtdb, 'live_tracking/user'), payload);
+      await set(ref(rtdb, 'live_tracking/patient'), payload);
+
+      // 3. Write under specific booking id
+      if (bookingId && bookingId !== 'active_trip') {
+        await set(ref(rtdb, `live_tracking/${bookingId}/patient`), payload);
+      }
+      return { success: true, payload };
+    } catch (e) {
+      console.warn('Firebase updatePatientLocation error:', e.message);
+      return { success: false, error: e.message };
+    }
+  }
+
+  return { success: true, payload, note: 'local-only' };
 }
 
 /**
- * User / Patient listens to live ambulance location on Map
+ * User / Patient listens to live ambulance/driver location on Map
  * @param {string} bookingId - The booking ID to track
  * @param {function} onLocationUpdate - Callback receiving ({ lat, lng, speed, status, updatedAt, source })
  * @returns {function} unsubscribe cleanup function
@@ -168,14 +196,59 @@ export function subscribeToAmbulanceLocation(bookingId, onLocationUpdate) {
       } catch (e) {}
     };
 
-    // Listen to specific ID path
-    attachListener(`live_tracking/${effectiveId}`);
+    // Listen to driver node
+    attachListener('live_tracking/driver');
 
-    // If ID is not active_trip, also attach listener to active_trip so changes on /active are received
+    // Listen to active_trip
+    attachListener('live_tracking/active_trip');
+
+    // Listen to specific ID path if different
     if (effectiveId !== 'active_trip') {
-      attachListener('live_tracking/active_trip');
+      attachListener(`live_tracking/${effectiveId}`);
     }
   }
+
+  return () => {
+    cleanups.forEach((fn) => {
+      try { fn(); } catch {}
+    });
+  };
+}
+
+/**
+ * Driver listens to live patient / user location
+ */
+export function subscribeToPatientLocation(bookingId, onPatientUpdate) {
+  if (typeof onPatientUpdate !== 'function' || !rtdb) return () => {};
+
+  const cleanups = [];
+
+  const attachListener = (path) => {
+    try {
+      const patientRef = ref(rtdb, path);
+      onValue(patientRef, (snap) => {
+        const val = snap.val();
+        if (val) {
+          const pLat = val.patientLat ?? val.lat;
+          const pLng = val.patientLng ?? val.lng;
+          if (typeof pLat === 'number' && typeof pLng === 'number') {
+            onPatientUpdate({
+              lat: pLat,
+              lng: pLng,
+              patientLat: pLat,
+              patientLng: pLng,
+              pickupAddress: val.pickupAddress || val.address,
+              updatedAt: val.updatedAt,
+            });
+          }
+        }
+      });
+      cleanups.push(() => off(patientRef));
+    } catch {}
+  };
+
+  attachListener('live_tracking/active_trip/patient');
+  attachListener('live_tracking/user');
 
   return () => {
     cleanups.forEach((fn) => {
