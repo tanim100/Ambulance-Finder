@@ -4,7 +4,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import dynamic from 'next/dynamic';
-import { MapPin, ArrowLeft, CheckCircle, Navigation, Map, Search, X, Loader2, Sparkles, Building2, Phone, ShieldCheck, ChevronDown, Check, Info } from 'lucide-react';
+import { MapPin, ArrowLeft, CheckCircle, Navigation, Map, Search, X, Loader2, Sparkles, Building2, Hospital, Phone, ShieldCheck, ChevronDown, Check, Info } from 'lucide-react';
 import Navbar from '@/components/layout/Navbar';
 import BottomNav from '@/components/layout/BottomNav';
 import Input from '@/components/ui/Input';
