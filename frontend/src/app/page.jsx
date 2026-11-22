@@ -269,16 +269,9 @@ export default function LandingPage() {
             <ThemeToggle />
             <Link
               href="/login"
-              className="hidden sm:inline-flex text-xs sm:text-sm font-bold px-4 py-2.5 rounded-xl border border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+              className="inline-flex text-xs sm:text-sm font-bold px-4 py-2.5 rounded-xl border border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
             >
               Sign In
-            </Link>
-            <Link
-              href="/request"
-              className="flex items-center gap-2 text-xs sm:text-sm font-extrabold bg-rose-600 hover:bg-rose-700 text-white px-4 sm:px-5 py-2.5 rounded-xl shadow-lg shadow-rose-600/30 hover:shadow-rose-600/40 active:scale-95 transition-all"
-            >
-              <Siren size={16} />
-              <span>Request Ambulance</span>
             </Link>
           </div>
         </div>
