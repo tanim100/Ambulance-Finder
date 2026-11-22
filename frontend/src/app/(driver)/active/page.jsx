@@ -12,7 +12,7 @@ import Card from '@/components/ui/Card';
 import { driverAPI } from '@/lib/api';
 import { useGeolocation } from '@/hooks/useGeolocation';
 import { emitDriverLocation } from '@/lib/socket';
-import { updateAmbulanceLocation, testFirebaseConnection } from '@/lib/firebaseTracking';
+import { updateAmbulanceLocation, testFirebaseConnection, subscribeToDestinationHospital } from '@/lib/firebaseTracking';
 import { rtdb } from '@/lib/firebase';
 import { ref, onValue, off } from 'firebase/database';
 
@@ -25,7 +25,7 @@ const MapView = dynamic(() => import('@/components/map/MapView'), {
   ),
 });
 
-const TRIP_STATUSES = ['Accepted', 'En Route', 'Arrived', 'Completed'];
+const TRIP_STATUSES = ['Accepted', 'En Route', 'Arrived', 'Heading to Hospital', 'Completed'];
 
 const ACTIVE_TRIP = {
   _id: 'active_trip',
@@ -35,7 +35,13 @@ const ACTIVE_TRIP = {
   ambulanceType: 'Advanced Life Support',
   vehicleNumber: 'DHA-AMB-4421',
   pickupLocation: 'House 12, Dhanmondi, Dhaka',
-  destination: 'Dhaka Medical College Hospital',
+  destination: 'Kurmitola General Hospital',
+  destinationHospital: {
+    name: 'Kurmitola General Hospital',
+    lat: 23.8188,
+    lng: 90.4074,
+    hotline: '01769-010200',
+  },
   userPhone: '+880 1700-111111',
   userLocation: { lat: 23.8103, lng: 90.4125 },
 };
@@ -188,9 +194,24 @@ export default function DriverActivePage() {
           }));
         }
       });
-      return () => off(patientRef);
+
+      // Also listen to destination hospital updates from Firebase
+      const unsubHospital = subscribeToDestinationHospital(tripIdParam, (hospital) => {
+        if (hospital && hospital.name) {
+          setTrip((prev) => ({
+            ...prev,
+            destination: hospital.name,
+            destinationHospital: hospital,
+          }));
+        }
+      });
+
+      return () => {
+        off(patientRef);
+        unsubHospital?.();
+      };
     } catch {}
-  }, []);
+  }, [tripIdParam]);
 
   // Update activeLoc whenever device hardware GPS or location arrives
   useEffect(() => {
@@ -261,12 +282,16 @@ export default function DriverActivePage() {
     return () => clearInterval(autoUploadTimerRef.current);
   }, [activeLoc, trip.status, hasRealGPS, isSimulating, broadcastLocation]);
 
-  // Simulated GPS movement loop towards the patient
+  // Simulated GPS movement loop towards the target (patient or destination hospital)
   useEffect(() => {
     if (isSimulating) {
       simulationTimerRef.current = setInterval(() => {
         setActiveLoc((prev) => {
-          const target = trip.userLocation || { lat: 23.8103, lng: 90.4125 };
+          const isHeadingToHospital = trip.status === 'Heading to Hospital';
+          const target = isHeadingToHospital && trip.destinationHospital
+            ? { lat: trip.destinationHospital.lat, lng: trip.destinationHospital.lng }
+            : (trip.userLocation || { lat: 23.8103, lng: 90.4125 });
+
           const step = 0.0006;
           const dLat = target.lat - prev.lat;
           const dLng = target.lng - prev.lng;
@@ -280,9 +305,9 @@ export default function DriverActivePage() {
           return {
             lat: prev.lat + (dLat / dist) * step,
             lng: prev.lng + (dLng / dist) * step,
-            speed: Math.round(35 + Math.random() * 10),
+            speed: Math.round(38 + Math.random() * 8),
             heading: Math.round((Math.atan2(dLng, dLat) * 180) / Math.PI),
-            source: 'Simulated Movement Demo',
+            source: isHeadingToHospital ? `En Route to ${trip.destination}` : 'Simulated Movement Demo',
           };
         });
       }, 2000);
@@ -291,7 +316,7 @@ export default function DriverActivePage() {
     }
 
     return () => clearInterval(simulationTimerRef.current);
-  }, [isSimulating, trip.userLocation]);
+  }, [isSimulating, trip.userLocation, trip.status, trip.destinationHospital, trip.destination]);
 
   const handleNextStatus = async () => {
     if (currentIdx >= TRIP_STATUSES.length - 1) return;
@@ -312,9 +337,10 @@ export default function DriverActivePage() {
   const getActionLabel = () => {
     const next = TRIP_STATUSES[currentIdx + 1];
     const labels = {
-      'En Route': '🚑 Mark as En Route',
-      'Arrived': '📍 Mark as Arrived',
-      'Completed': '✅ Complete Trip',
+      'En Route': '🚑 Mark as En Route (Heading to Patient)',
+      'Arrived': '📍 Mark as Arrived (At Pickup Point)',
+      'Heading to Hospital': '🏥 Patient Boarded ➔ Head to Hospital ER',
+      'Completed': '✅ Arrived at Hospital ER (Complete Trip)',
     };
     return labels[next] || 'Update Status';
   };
@@ -523,10 +549,14 @@ export default function DriverActivePage() {
             center={activeLoc ? [activeLoc.lat, activeLoc.lng] : (trip.userLocation ? [trip.userLocation.lat, trip.userLocation.lng] : [23.8103, 90.4125])}
             userLocation={trip.userLocation}
             driverLocation={activeLoc}
+            hospitalLocation={trip.destinationHospital ? { lat: trip.destinationHospital.lat, lng: trip.destinationHospital.lng, name: trip.destinationHospital.name } : null}
             onLocationSelect={handleMapClick}
-            route={activeLoc && trip.userLocation
-              ? [[activeLoc.lat, activeLoc.lng], [trip.userLocation.lat, trip.userLocation.lng]]
-              : null
+            route={
+              trip.status === 'Heading to Hospital' && trip.destinationHospital
+                ? [[activeLoc.lat, activeLoc.lng], [trip.destinationHospital.lat, trip.destinationHospital.lng]]
+                : activeLoc && trip.userLocation
+                ? [[activeLoc.lat, activeLoc.lng], [trip.userLocation.lat, trip.userLocation.lng]]
+                : null
             }
             height="100%"
           />
@@ -636,7 +666,15 @@ export default function DriverActivePage() {
                     disabled={updating}
                     className="px-3 py-1.5 rounded-xl text-xs font-bold bg-primary-600 hover:bg-primary-700 text-white shadow-sm flex items-center gap-1 transition-all"
                   >
-                    <span>{trip.status === 'Accepted' ? 'En Route' : trip.status === 'En Route' ? 'Arrived' : 'Complete'}</span>
+                    <span>
+                      {trip.status === 'Accepted'
+                        ? 'En Route'
+                        : trip.status === 'En Route'
+                        ? 'Arrived'
+                        : trip.status === 'Arrived'
+                        ? 'Head to Hospital'
+                        : 'Complete Trip'}
+                    </span>
                   </button>
                 )}
 

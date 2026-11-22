@@ -258,6 +258,84 @@ export function subscribeToPatientLocation(bookingId, onPatientUpdate) {
 }
 
 /**
+ * Update Destination Hospital in Firebase Realtime Database
+ */
+export async function updateDestinationHospital(bookingId, hospital) {
+  if (!hospital) return { success: false };
+  const payload = {
+    id: hospital.id || 'general',
+    name: hospital.name,
+    shortName: hospital.shortName || hospital.name,
+    lat: Number(hospital.lat),
+    lng: Number(hospital.lng),
+    hotline: hospital.hotline || '',
+    emergency: hospital.emergency || '',
+    area: hospital.area || '',
+    updatedAt: Date.now(),
+  };
+
+  if (localChannel) {
+    try {
+      localChannel.postMessage({ type: 'destination_hospital', ...payload });
+    } catch {}
+  }
+
+  if (rtdb) {
+    try {
+      await update(ref(rtdb, 'live_tracking/active_trip/destination'), payload);
+      await set(ref(rtdb, 'live_tracking/destination'), payload);
+      if (bookingId && bookingId !== 'active_trip') {
+        await update(ref(rtdb, `live_tracking/${bookingId}/destination`), payload);
+      }
+    } catch (e) {
+      console.warn('updateDestinationHospital error:', e.message);
+    }
+  }
+  return { success: true, payload };
+}
+
+/**
+ * Driver or User listens to selected destination hospital
+ */
+export function subscribeToDestinationHospital(bookingId, onHospitalUpdate) {
+  if (typeof onHospitalUpdate !== 'function') return () => {};
+  const cleanups = [];
+
+  if (localChannel) {
+    const handleLocal = (event) => {
+      if (event.data?.type === 'destination_hospital') {
+        onHospitalUpdate(event.data);
+      }
+    };
+    localChannel.addEventListener('message', handleLocal);
+    cleanups.push(() => localChannel.removeEventListener('message', handleLocal));
+  }
+
+  if (rtdb) {
+    const attach = (path) => {
+      try {
+        const destRef = ref(rtdb, path);
+        onValue(destRef, (snap) => {
+          const val = snap.val();
+          if (val && typeof val.lat === 'number' && typeof val.lng === 'number') {
+            onHospitalUpdate(val);
+          }
+        });
+        cleanups.push(() => off(destRef));
+      } catch {}
+    };
+    attach('live_tracking/active_trip/destination');
+    attach('live_tracking/destination');
+  }
+
+  return () => {
+    cleanups.forEach((fn) => {
+      try { fn(); } catch {}
+    });
+  };
+}
+
+/**
  * Health check to verify Firebase connectivity directly
  */
 export async function testFirebaseConnection() {
