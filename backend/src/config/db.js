@@ -40,8 +40,8 @@ const connectDB = async () => {
     // Load models & associations
     require('../models');
 
-    // Sync all tables (alter: true ensures columns are created/updated safely)
-    await sequelize.sync({ alter: true });
+    // Sync all tables safely without creating redundant indexes
+    await sequelize.sync();
     console.log('MySQL Database tables synchronized successfully.');
 
     // Auto-seed default accounts (Admin, User, Driver) if database is newly initialized

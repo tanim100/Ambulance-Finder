@@ -4,13 +4,21 @@
 import { io } from 'socket.io-client';
 import { getToken } from './auth';
 
-const SOCKET_URL = process.env.NEXT_PUBLIC_SOCKET_URL || 'http://localhost:5000';
+const getSocketURL = () => {
+  if (typeof window !== 'undefined' && window.location.hostname) {
+    const hostname = window.location.hostname;
+    if (hostname !== 'localhost' && hostname !== '127.0.0.1') {
+      return `http://${hostname}:5000`;
+    }
+  }
+  return process.env.NEXT_PUBLIC_SOCKET_URL || 'http://localhost:5000';
+};
 
 let socket = null;
 
 export function getSocket() {
   if (!socket) {
-    socket = io(SOCKET_URL, {
+    socket = io(getSocketURL(), {
       auth: (cb) => {
         cb({ token: getToken() });
       },

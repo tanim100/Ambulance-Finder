@@ -14,7 +14,7 @@ const server = http.createServer(app);
 // ─── Attach Socket.io to HTTP Server ──────────────────────────────────────────
 const io = new Server(server, {
   cors: {
-    origin: process.env.CLIENT_URL || 'http://localhost:3000',
+    origin: (origin, callback) => callback(null, true),
     methods: ['GET', 'POST'],
     credentials: true,
   },
@@ -33,13 +33,14 @@ const startServer = async () => {
   try {
     await connectDB();
 
-    server.listen(PORT, () => {
+    server.listen(PORT, '0.0.0.0', () => {
       console.log(`
 ╔══════════════════════════════════════════════╗
 ║      🚑 Ambulance Finder API Server          ║
 ╠══════════════════════════════════════════════╣
 ║  Status   : Running                          ║
 ║  Port     : ${String(PORT).padEnd(30)}║
+║  Network  : http://0.0.0.0:${String(PORT).padEnd(21)}║
 ║  Env      : ${String(process.env.NODE_ENV || 'development').padEnd(30)}║
 ║  Socket   : Enabled                          ║
 ╚══════════════════════════════════════════════╝

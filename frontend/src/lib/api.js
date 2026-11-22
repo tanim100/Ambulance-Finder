@@ -4,19 +4,33 @@
 import axios from 'axios';
 import { getToken, removeToken } from './auth';
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api';
+const getBaseURL = () => {
+  if (typeof window !== 'undefined' && window.location.hostname) {
+    const hostname = window.location.hostname;
+    if (hostname !== 'localhost' && hostname !== '127.0.0.1') {
+      return `http://${hostname}:5000/api`;
+    }
+  }
+  return process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api';
+};
 
 const api = axios.create({
-  baseURL: API_URL,
+  baseURL: getBaseURL(),
   timeout: 20000,
   headers: {
     'Content-Type': 'application/json',
   },
 });
 
-// Request interceptor — attach JWT token
+// Request interceptor — attach JWT token and adapt to current hostname
 api.interceptors.request.use(
   (config) => {
+    if (typeof window !== 'undefined' && window.location.hostname) {
+      const hostname = window.location.hostname;
+      if (hostname !== 'localhost' && hostname !== '127.0.0.1') {
+        config.baseURL = `http://${hostname}:5000/api`;
+      }
+    }
     const token = getToken();
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
