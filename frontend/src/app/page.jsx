@@ -59,7 +59,7 @@ const AMBULANCE_FLEET = [
     name: 'Mobile ICU Critical Care',
     category: 'Ventilator & Unstable ICU',
     eta: '5 - 8 Mins',
-    baseFare: 'BDT 2,800',
+    baseFare: 'BDT 3,000',
     color: 'from-purple-500 to-rose-500',
     tagColor: 'bg-purple-50 text-purple-700 border-purple-200 dark:bg-purple-950/40 dark:text-purple-300 dark:border-purple-800',
     description: 'Hospital Intensive Care Unit on wheels designed for intubated, comatose, or multi-organ failure critical transfers.',
