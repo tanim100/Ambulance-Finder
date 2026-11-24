@@ -55,7 +55,7 @@ const Booking = sequelize.define(
       },
     },
     emergencyType: {
-      type: DataTypes.ENUM('accident', 'cardiac', 'respiratory', 'general'),
+      type: DataTypes.ENUM('accident', 'cardiac', 'respiratory', 'general', 'trauma', 'maternity'),
       allowNull: false,
     },
     estimatedTime: {

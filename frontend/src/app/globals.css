@@ -311,3 +311,65 @@ main {
   transition: transform 0.6s linear !important;
   will-change: transform;
 }
+
+/* Modern Turn-by-Turn Road Route Flow Animation */
+@keyframes routeDashFlow {
+  from {
+    stroke-dashoffset: 48;
+  }
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
+.leaflet-route-flow {
+  animation: routeDashFlow 2s linear infinite !important;
+}
+
+@keyframes pinPulseRipple {
+  0% {
+    transform: scale(0.9);
+    opacity: 0.8;
+  }
+  50% {
+    transform: scale(1.35);
+    opacity: 0.25;
+  }
+  100% {
+    transform: scale(1.7);
+    opacity: 0;
+  }
+}
+
+/* Dual Emergency Strobe Beacons */
+@keyframes emergencyStrobeRed {
+  0%, 100% { opacity: 1; transform: scale(1.1); filter: drop-shadow(0 0 5px #ef4444); }
+  50% { opacity: 0.2; transform: scale(0.85); filter: none; }
+}
+@keyframes emergencyStrobeBlue {
+  0%, 100% { opacity: 0.2; transform: scale(0.85); filter: none; }
+  50% { opacity: 1; transform: scale(1.1); filter: drop-shadow(0 0 5px #3b82f6); }
+}
+
+.strobe-red {
+  animation: emergencyStrobeRed 0.5s ease-in-out infinite !important;
+}
+.strobe-blue {
+  animation: emergencyStrobeBlue 0.5s ease-in-out infinite !important;
+}
+
+/* Radar Pulse Wave for Patient GPS */
+@keyframes radarSweepWave {
+  0% {
+    transform: scale(0.6);
+    opacity: 0.8;
+  }
+  100% {
+    transform: scale(2.4);
+    opacity: 0;
+  }
+}
+
+.animate-radar-sweep {
+  animation: radarSweepWave 2s cubic-bezier(0, 0.2, 0.8, 1) infinite !important;
+}

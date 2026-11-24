@@ -28,7 +28,7 @@ const DEFAULT_SETTINGS = {
   hotline: '999',
   supportPhone: '+880 1711 000 999',
   supportEmail: 'support@ambulancefinder.com',
-  currency: 'BDT (৳)',
+  currency: 'BDT',
   timezone: 'Asia/Dhaka (GMT+6)',
   
   // Dispatch & Geofencing
@@ -387,7 +387,7 @@ export default function AdminSettingsPage() {
                 <div className="bg-white dark:bg-slate-800 rounded-2xl border border-gray-100 dark:border-slate-700 p-6 shadow-sm">
                   <h3 className="text-base font-bold text-gray-900 dark:text-white mb-1 flex items-center gap-2">
                     <DollarSign size={18} className="text-emerald-500" />
-                    Standard Fare & Pricing Matrix (BDT ৳)
+                    Standard Fare & Pricing Matrix (BDT)
                   </h3>
                   <p className="text-xs text-gray-500 dark:text-gray-400 mb-5">
                     Define baseline fares by vehicle category and distance calculation rates
@@ -431,7 +431,7 @@ export default function AdminSettingsPage() {
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2">
                     <div>
                       <label className="block text-xs font-semibold text-gray-700 dark:text-gray-300 mb-1.5">
-                        Distance Rate (৳ per KM)
+                        Distance Rate (BDT per KM)
                       </label>
                       <input
                         type="number"

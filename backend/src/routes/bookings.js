@@ -32,7 +32,7 @@ router.post(
     body('pickupLocation.lng').isFloat().withMessage('Valid pickup longitude is required'),
     body('patientName').trim().notEmpty().withMessage('Patient name is required'),
     body('emergencyType')
-      .isIn(['accident', 'cardiac', 'respiratory', 'general'])
+      .isIn(['accident', 'cardiac', 'respiratory', 'general', 'trauma', 'maternity'])
       .withMessage('Valid emergency type is required'),
   ],
   validate,

@@ -144,6 +144,18 @@ export default function TrackingPage() {
   const simRouteIndexRef = useRef(0);
   const simRoutePointsRef = useRef([]);
   const lastRouteTargetRef = useRef('');
+  const hasInitializedDriverRef = useRef(false);
+
+  // Initialize realistic starting driver position once patientPos is known (Runs ONCE safely)
+  useEffect(() => {
+    if (!hasInitializedDriverRef.current && patientPos) {
+      hasInitializedDriverRef.current = true;
+      setDriverPos((prev) => {
+        if (prev) return prev;
+        return { lat: patientPos.lat - 0.008, lng: patientPos.lng + 0.010 };
+      });
+    }
+  }, [patientPos]);
 
   const [loading, setLoading] = useState(true);
   const [cancelling, setCancelling] = useState(false);
@@ -395,30 +407,42 @@ export default function TrackingPage() {
   }, []);
 
   // Update route ONLY when phase switches or hospital changes (NEVER on micro GPS ticks!)
+  // Update route when phase switches, hospital changes, or driver location changes significantly
   useEffect(() => {
     if (isSimulating) return;
 
-    const targetKey = tripPhase === 'pickup'
-      ? `pickup_${patientPos?.lat?.toFixed?.(3)}_${patientPos?.lng?.toFixed?.(3)}`
-      : `hosp_${selectedHospital?.id}`;
-
-    if (lastRouteTargetRef.current === targetKey) return;
-
     if (tripPhase === 'pickup') {
-      if (patientPos) {
-        const startPt = driverPos || { lat: patientPos.lat - 0.008, lng: patientPos.lng + 0.010 };
-        fetchRoadRoute(startPt, patientPos);
-        lastRouteTargetRef.current = targetKey;
-      }
+      if (!patientPos) return;
+      const defaultDispatch = { lat: patientPos.lat - 0.008, lng: patientPos.lng + 0.010 };
+      const dist = driverPos && patientPos ? calculateDistance(driverPos.lat, driverPos.lng, patientPos.lat, patientPos.lng) : null;
+      const isTooClose = dist !== null && dist < 0.15;
+      const startPt = (!driverPos || isTooClose) ? defaultDispatch : driverPos;
+
+      const targetKey = `pickup_${startPt.lat?.toFixed?.(3)}_${startPt.lng?.toFixed?.(3)}_${patientPos.lat?.toFixed?.(3)}_${patientPos.lng?.toFixed?.(3)}`;
+      if (lastRouteTargetRef.current === targetKey) return;
+      lastRouteTargetRef.current = targetKey;
+
+      fetchRoadRoute(startPt, patientPos);
     } else {
       // Phase 2: Patient/Driver -> Destination Hospital
-      if (selectedHospital) {
-        const startPoint = driverPos || patientPos || { lat: 23.8282, lng: 90.4163 };
-        fetchRoadRoute(startPoint, { lat: selectedHospital.lat, lng: selectedHospital.lng });
-        lastRouteTargetRef.current = targetKey;
-      }
+      if (!selectedHospital) return;
+      const startPoint = driverPos || patientPos || { lat: 23.8282, lng: 90.4163 };
+      const targetKey = `hosp_${startPoint.lat?.toFixed?.(3)}_${startPoint.lng?.toFixed?.(3)}_${selectedHospital.id}`;
+      if (lastRouteTargetRef.current === targetKey) return;
+      lastRouteTargetRef.current = targetKey;
+
+      fetchRoadRoute(startPoint, { lat: selectedHospital.lat, lng: selectedHospital.lng });
     }
-  }, [tripPhase, selectedHospital?.id, Boolean(patientPos), isSimulating, fetchRoadRoute]);
+  }, [
+    tripPhase,
+    selectedHospital?.id,
+    patientPos?.lat,
+    patientPos?.lng,
+    driverPos?.lat,
+    driverPos?.lng,
+    isSimulating,
+    fetchRoadRoute,
+  ]);
 
   // ── 6. Live Movement Simulation Engine (Drive along real road) ──
   const startLiveMovement = async () => {
@@ -427,11 +451,15 @@ export default function TrackingPage() {
 
     if (tripPhase === 'pickup') {
       if (!patientPos) return;
-      startPt = driverPos || { lat: patientPos.lat - 0.008, lng: patientPos.lng + 0.010 };
+      const dist = driverPos && patientPos ? calculateDistance(driverPos.lat, driverPos.lng, patientPos.lat, patientPos.lng) : null;
+      const isTooClose = dist !== null && dist < 0.15;
+      startPt = (!driverPos || isTooClose)
+        ? { lat: patientPos.lat - 0.008, lng: patientPos.lng + 0.010 }
+        : driverPos;
       targetPt = patientPos;
     } else {
       // Heading to Hospital
-      startPt = driverPos || patientPos;
+      startPt = driverPos || patientPos || { lat: 23.8282, lng: 90.4163 };
       targetPt = { lat: selectedHospital.lat, lng: selectedHospital.lng };
     }
 
@@ -453,6 +481,7 @@ export default function TrackingPage() {
         if (tripPhase === 'pickup') {
           // Arrived at pickup
           setBooking((prev) => ({ ...prev, status: 'Arrived' }));
+          setRoadStats({ distanceKm: '0.0', durationMin: 0 });
           updateAmbulanceLocation('active_trip', {
             lat: patientPos.lat,
             lng: patientPos.lng,
@@ -464,6 +493,7 @@ export default function TrackingPage() {
         } else {
           // Arrived at Hospital!
           setBooking((prev) => ({ ...prev, status: 'Completed' }));
+          setRoadStats({ distanceKm: '0.0', durationMin: 0 });
           updateAmbulanceLocation('active_trip', {
             lat: selectedHospital.lat,
             lng: selectedHospital.lng,
@@ -483,6 +513,16 @@ export default function TrackingPage() {
 
       const newDriverLoc = { lat: nextPoint[0], lng: nextPoint[1] };
       setDriverPos(newDriverLoc);
+
+      // Dynamically calculate remaining distance & ETA to destination
+      if (targetPt) {
+        const remainingDist = calculateDistance(newDriverLoc.lat, newDriverLoc.lng, targetPt.lat, targetPt.lng);
+        const remainingMin = Math.max(1, Math.round(((remainingDist || 0) / 38) * 60));
+        setRoadStats({
+          distanceKm: remainingDist != null && remainingDist < 0.05 ? '0.0' : remainingDist != null ? remainingDist.toFixed(1) : '0.0',
+          durationMin: remainingDist != null && remainingDist < 0.05 ? 0 : remainingMin,
+        });
+      }
 
       const speed = Math.round(38 + Math.random() * 8);
       const currentStatus = tripPhase === 'pickup' ? 'En Route' : 'Heading to Hospital';
@@ -522,14 +562,30 @@ export default function TrackingPage() {
     pauseLiveMovement();
     if (tripPhase === 'pickup') {
       if (patientPos) {
-        const freshDriver = { lat: patientPos.lat - 0.007, lng: patientPos.lng + 0.009 };
+        const freshDriver = { lat: patientPos.lat - 0.008, lng: patientPos.lng + 0.010 };
         setDriverPos(freshDriver);
+        setBooking((prev) => ({ ...prev, status: 'En Route' }));
         fetchRoadRoute(freshDriver, patientPos);
+        updateDriverLiveLocation(id || 'active_trip', {
+          lat: freshDriver.lat,
+          lng: freshDriver.lng,
+          speed: 38,
+          heading: 0,
+          status: 'En Route',
+        });
       }
     } else {
       if (patientPos) {
         setDriverPos(patientPos);
+        setBooking((prev) => ({ ...prev, status: 'Heading to Hospital' }));
         fetchRoadRoute(patientPos, { lat: selectedHospital.lat, lng: selectedHospital.lng });
+        updateDriverLiveLocation(id || 'active_trip', {
+          lat: patientPos.lat,
+          lng: patientPos.lng,
+          speed: 38,
+          heading: 0,
+          status: 'Heading to Hospital',
+        });
       }
     }
   };
@@ -581,8 +637,26 @@ export default function TrackingPage() {
   // Distance & ETA
   const displayTarget = tripPhase === 'pickup' ? patientPos : selectedHospital;
   const directDist = driverPos && displayTarget ? calculateDistance(driverPos.lat, driverPos.lng, displayTarget.lat, displayTarget.lng) : null;
-  const displayDistance = roadStats.distanceKm ? `${roadStats.distanceKm} km away` : directDist ? `${directDist.toFixed(1)} km away` : '1.2 km away';
-  const displayETA = roadStats.durationMin ? `~${roadStats.durationMin} min` : directDist ? `~${Math.max(1, Math.round((directDist / 35) * 60))} min` : '~2 min';
+  const hasArrivedPickup = tripPhase === 'pickup' && (booking?.status === 'Arrived' || (roadStats.distanceKm === '0.0' && !isSimulating));
+  const hasArrivedHospital = tripPhase === 'hospital' && (booking?.status === 'Completed' || (roadStats.distanceKm === '0.0' && !isSimulating));
+
+  const displayDistance = hasArrivedPickup
+    ? 'Arrived at Pickup'
+    : hasArrivedHospital
+    ? 'Arrived at Hospital ER'
+    : roadStats.distanceKm
+    ? `${roadStats.distanceKm} km away`
+    : directDist
+    ? `${directDist.toFixed(1)} km away`
+    : '1.4 km away';
+
+  const displayETA = hasArrivedPickup || hasArrivedHospital
+    ? 'Now'
+    : roadStats.durationMin
+    ? `~${roadStats.durationMin} min`
+    : directDist
+    ? `~${Math.max(1, Math.round((directDist / 35) * 60))} min`
+    : '~3 min';
 
   // Cancel booking (Roadmap Step 7: stop sharing and remove locations/{id})
   const handleCancel = async () => {
@@ -760,12 +834,20 @@ export default function TrackingPage() {
             </span>
             <div>
               <p className="text-xs font-bold leading-tight">
-                {isSimulating
+                {hasArrivedPickup
+                  ? '✅ Ambulance Arrived at Patient Pickup!'
+                  : hasArrivedHospital
+                  ? `🏥 Patient Successfully Delivered to ${selectedHospital.name} ER!`
+                  : isSimulating
                   ? (tripPhase === 'pickup' ? '🚑 Ambulance Moving to Patient Pickup' : `🚑 Speeding to ${selectedHospital.shortName} ER`)
                   : (tripPhase === 'pickup' ? '📍 Phase 1: Ambulance En Route to Pickup' : `🏥 Phase 2: Transporting Patient to ${selectedHospital.shortName}`)}
               </p>
               <p className="text-[11px] text-white/80">
-                {isSimulating
+                {hasArrivedPickup
+                  ? 'Patient has boarded the ambulance. Tap the green button to start drive to Hospital ER.'
+                  : hasArrivedHospital
+                  ? 'Patient handed over to emergency doctors. Trip complete.'
+                  : isSimulating
                   ? 'Streaming live turn-by-turn road coordinates to Firebase RTDB...'
                   : (tripPhase === 'pickup' ? 'Click below to watch ambulance drive to patient, or board to head to hospital.' : 'Watch the ambulance speed along the real road to the ER entrance.')}
               </p>
@@ -773,7 +855,25 @@ export default function TrackingPage() {
           </div>
 
           <div className="flex items-center gap-2">
-            {!isSimulating ? (
+            {hasArrivedPickup ? (
+              <button
+                type="button"
+                onClick={() => proceedToHospital(selectedHospital)}
+                className="px-4 py-1.5 rounded-xl text-xs font-bold bg-emerald-500 hover:bg-emerald-400 text-white shadow-md flex items-center gap-1.5 transition-all active:scale-95 animate-pulse"
+              >
+                <span>🚑 Board Patient ➔ Head to Hospital ER</span>
+                <span>➔</span>
+              </button>
+            ) : hasArrivedHospital ? (
+              <button
+                type="button"
+                onClick={returnToPickupPhase}
+                className="px-4 py-1.5 rounded-xl text-xs font-bold bg-white text-emerald-800 hover:bg-emerald-50 shadow-md flex items-center gap-1.5 transition-all active:scale-95"
+              >
+                <RotateCcw size={14} />
+                <span>Trip Completed (Restart)</span>
+              </button>
+            ) : !isSimulating ? (
               <button
                 type="button"
                 onClick={startLiveMovement}
@@ -836,7 +936,7 @@ export default function TrackingPage() {
         </div>
 
         {/* ── Leaflet Navigation Map ── */}
-        <div className="h-[440px] rounded-2xl overflow-hidden border border-gray-200 shadow-sm relative">
+        <div className="h-[480px] rounded-2xl overflow-hidden border border-gray-200/90 shadow-md relative ring-1 ring-black/5 bg-slate-100">
           <MapComponent
             pickupLat={mapCenter.pickupLat}
             pickupLng={mapCenter.pickupLng}

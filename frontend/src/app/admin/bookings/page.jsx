@@ -58,7 +58,7 @@ export default function AdminBookingsPage() {
             <Link href="/admin" className="p-1.5 rounded-lg hover:bg-gray-100"><ChevronLeft size={20} /></Link>
             <div>
               <h1 className="text-xl font-bold text-gray-900">All Bookings</h1>
-              <p className="text-sm text-gray-500">{bookings.length} total · ৳{totalRevenue.toLocaleString()} revenue</p>
+              <p className="text-sm text-gray-500">{bookings.length} total · BDT {totalRevenue.toLocaleString()} revenue</p>
             </div>
           </div>
         </div>
@@ -130,7 +130,7 @@ export default function AdminBookingsPage() {
                       </td>
                       <td className="px-5 py-4">
                         <span className="text-sm font-bold text-gray-900">
-                          {b.fare > 0 ? `৳${b.fare}` : '—'}
+                          {b.fare > 0 ? `BDT ${b.fare}` : '—'}
                         </span>
                       </td>
                       <td className="px-5 py-4">

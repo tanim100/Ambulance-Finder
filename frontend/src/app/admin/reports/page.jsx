@@ -375,7 +375,7 @@ export default function ReportsPage() {
             <KpiCard icon={BarChart3}    label="Total Bookings"  value={totals.totalBookings?.toLocaleString()} sub={`${completionRate}% completion rate`} color="bg-blue-500" />
             <KpiCard icon={CheckCircle2} label="Completed"       value={totals.completed?.toLocaleString()}     sub="Successfully delivered"  color="bg-green-500" />
             <KpiCard icon={XCircle}      label="Cancelled"       value={totals.cancelled?.toLocaleString()}     sub="Booking cancelled"       color="bg-red-500" />
-            <KpiCard icon={DollarSign}   label="Total Revenue"   value={`৳${Number(totals.totalRevenue || 0).toLocaleString()}`} sub="From completed trips" color="bg-purple-500" />
+            <KpiCard icon={DollarSign}   label="Total Revenue"   value={`BDT ${Number(totals.totalRevenue || 0).toLocaleString()}`} sub="From completed trips" color="bg-purple-500" />
           </div>
 
           {/* Monthly Trend Table + Bars */}
@@ -426,7 +426,7 @@ export default function ReportsPage() {
               <table className="w-full">
                 <thead className="bg-gray-50">
                   <tr>
-                    {['Month', 'Completed', 'Cancelled', 'Pending', 'Revenue (৳)'].map((h) => (
+                    {['Month', 'Completed', 'Cancelled', 'Pending', 'Revenue (BDT)'].map((h) => (
                       <th key={h} className="text-left text-xs font-semibold text-gray-500 px-5 py-3 uppercase tracking-wide">
                         {h}
                       </th>
@@ -447,7 +447,7 @@ export default function ReportsPage() {
                         <span className="text-amber-600 font-semibold text-sm">{m.pending}</span>
                       </td>
                       <td className="px-5 py-4 font-semibold text-gray-900 text-sm">
-                        ৳{Number(m.revenue || 0).toLocaleString()}
+                        BDT {Number(m.revenue || 0).toLocaleString()}
                       </td>
                     </tr>
                   ))}
@@ -457,7 +457,7 @@ export default function ReportsPage() {
                     <td className="px-5 py-4 text-sm text-green-700">{monthly.reduce((s, m) => s + m.completed, 0)}</td>
                     <td className="px-5 py-4 text-sm text-red-600">{monthly.reduce((s, m) => s + m.cancelled, 0)}</td>
                     <td className="px-5 py-4 text-sm text-amber-600">{monthly.reduce((s, m) => s + m.pending, 0)}</td>
-                    <td className="px-5 py-4 text-sm text-gray-900">৳{monthly.reduce((s, m) => s + Number(m.revenue || 0), 0).toLocaleString()}</td>
+                    <td className="px-5 py-4 text-sm text-gray-900">BDT {monthly.reduce((s, m) => s + Number(m.revenue || 0), 0).toLocaleString()}</td>
                   </tr>
                 </tbody>
               </table>
@@ -477,7 +477,7 @@ export default function ReportsPage() {
               <table className="w-full">
                 <thead className="bg-gray-50">
                   <tr>
-                    {['Rank', 'Driver', 'Phone', 'Completed Trips', 'Total Earned (৳)'].map((h) => (
+                    {['Rank', 'Driver', 'Phone', 'Completed Trips', 'Total Earned (BDT)'].map((h) => (
                       <th key={h} className="text-left text-xs font-semibold text-gray-500 px-5 py-3 uppercase tracking-wide">
                         {h}
                       </th>
@@ -500,7 +500,7 @@ export default function ReportsPage() {
                         <span className="text-green-700 font-bold text-sm">{d.completed}</span>
                       </td>
                       <td className="px-5 py-4 font-semibold text-gray-900 text-sm">
-                        ৳{Number(d.earned || 0).toLocaleString()}
+                        BDT {Number(d.earned || 0).toLocaleString()}
                       </td>
                     </tr>
                   ))}
