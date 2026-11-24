@@ -144,6 +144,18 @@ export default function TrackingPage() {
   const simRouteIndexRef = useRef(0);
   const simRoutePointsRef = useRef([]);
   const lastRouteTargetRef = useRef('');
+  const hasInitializedDriverRef = useRef(false);
+
+  // Initialize realistic starting driver position once patientPos is known (Runs ONCE safely)
+  useEffect(() => {
+    if (!hasInitializedDriverRef.current && patientPos) {
+      hasInitializedDriverRef.current = true;
+      setDriverPos((prev) => {
+        if (prev) return prev;
+        return { lat: patientPos.lat - 0.008, lng: patientPos.lng + 0.010 };
+      });
+    }
+  }, [patientPos]);
 
   const [loading, setLoading] = useState(true);
   const [cancelling, setCancelling] = useState(false);
@@ -408,12 +420,10 @@ export default function TrackingPage() {
       if (patientPos) {
         // Dispatch location ~1.5 km away from patient
         const defaultDispatch = { lat: patientPos.lat - 0.008, lng: patientPos.lng + 0.010 };
-        const isTooClose = driverPos && calculateDistance(driverPos.lat, driverPos.lng, patientPos.lat, patientPos.lng) < 0.15;
+        const dist = driverPos && patientPos ? calculateDistance(driverPos.lat, driverPos.lng, patientPos.lat, patientPos.lng) : null;
+        const isTooClose = dist !== null && dist < 0.15;
         const startPt = (!driverPos || isTooClose) ? defaultDispatch : driverPos;
 
-        if (!driverPos || isTooClose) {
-          setDriverPos(startPt);
-        }
         fetchRoadRoute(startPt, patientPos);
         lastRouteTargetRef.current = targetKey;
       }
@@ -434,7 +444,8 @@ export default function TrackingPage() {
 
     if (tripPhase === 'pickup') {
       if (!patientPos) return;
-      const isTooClose = driverPos && calculateDistance(driverPos.lat, driverPos.lng, patientPos.lat, patientPos.lng) < 0.15;
+      const dist = driverPos && patientPos ? calculateDistance(driverPos.lat, driverPos.lng, patientPos.lat, patientPos.lng) : null;
+      const isTooClose = dist !== null && dist < 0.15;
       startPt = (!driverPos || isTooClose)
         ? { lat: patientPos.lat - 0.008, lng: patientPos.lng + 0.010 }
         : driverPos;
@@ -499,10 +510,10 @@ export default function TrackingPage() {
       // Dynamically calculate remaining distance & ETA to destination
       if (targetPt) {
         const remainingDist = calculateDistance(newDriverLoc.lat, newDriverLoc.lng, targetPt.lat, targetPt.lng);
-        const remainingMin = Math.max(1, Math.round((remainingDist / 38) * 60));
+        const remainingMin = Math.max(1, Math.round(((remainingDist || 0) / 38) * 60));
         setRoadStats({
-          distanceKm: remainingDist < 0.05 ? '0.0' : remainingDist.toFixed(1),
-          durationMin: remainingDist < 0.05 ? 0 : remainingMin,
+          distanceKm: remainingDist != null && remainingDist < 0.05 ? '0.0' : remainingDist != null ? remainingDist.toFixed(1) : '0.0',
+          durationMin: remainingDist != null && remainingDist < 0.05 ? 0 : remainingMin,
         });
       }
 

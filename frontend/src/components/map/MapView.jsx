@@ -327,39 +327,6 @@ export default function MapView({
         </div>
       )}
 
-      {/* Global CSS for zero-jitter smooth marker gliding & route animation */}
-      <style jsx global>{`
-        .leaflet-marker-icon {
-          transition: transform 0.6s linear !important;
-          will-change: transform;
-        }
-        @keyframes routeDashFlow {
-          from {
-            stroke-dashoffset: 48;
-          }
-          to {
-            stroke-dashoffset: 0;
-          }
-        }
-        .leaflet-route-flow {
-          animation: routeDashFlow 2s linear infinite !important;
-        }
-        @keyframes pinPulseRipple {
-          0% {
-            transform: scale(0.9);
-            opacity: 0.8;
-          }
-          50% {
-            transform: scale(1.35);
-            opacity: 0.25;
-          }
-          100% {
-            transform: scale(1.7);
-            opacity: 0;
-          }
-        }
-      `}</style>
-
       <MapContainer
         center={center}
         zoom={zoom}
