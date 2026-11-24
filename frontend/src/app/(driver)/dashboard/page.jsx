@@ -158,7 +158,7 @@ export default function DriverDashboard() {
               <p className="text-xs text-green-600">Today's Trips</p>
             </div>
             <div className="bg-blue-50 rounded-xl p-3 text-center">
-              <p className="text-xl font-black text-blue-700">৳3,200</p>
+              <p className="text-xl font-black text-blue-700">BDT 3,200</p>
               <p className="text-xs text-blue-600">Today's Earning</p>
             </div>
             <div className="bg-yellow-50 rounded-xl p-3 text-center">

@@ -95,7 +95,7 @@ export default function HistoryPage() {
               <p className="text-xs text-green-600">Completed</p>
             </div>
             <div className="flex-1 bg-primary-50 border border-primary-100 rounded-2xl p-3 text-center">
-              <p className="text-xl font-black text-primary-700">৳{totalSpent.toLocaleString()}</p>
+              <p className="text-xl font-black text-primary-700">BDT {totalSpent.toLocaleString()}</p>
               <p className="text-xs text-primary-600">Total Spent</p>
             </div>
             <div className="flex-1 bg-red-50 border border-red-100 rounded-2xl p-3 text-center">
@@ -176,7 +176,7 @@ export default function HistoryPage() {
                       </div>
                       <div className="flex items-center gap-2">
                         {booking.fare > 0 && (
-                          <span className="text-sm font-bold text-gray-900">৳{booking.fare}</span>
+                          <span className="text-sm font-bold text-gray-900">BDT {booking.fare}</span>
                         )}
                         <ChevronRight size={14} className="text-gray-300" />
                       </div>

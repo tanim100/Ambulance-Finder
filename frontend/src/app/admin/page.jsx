@@ -114,7 +114,7 @@ export default function AdminDashboard() {
             <StatCard icon={Users}      label="Total Users"       value={stats.totalUsers?.toLocaleString()}      change={12} color="bg-blue-500" />
             <StatCard icon={Ambulance}  label="Active Ambulances" value={stats.activeAmbulances}                  change={4}  color="bg-primary-600" />
             <StatCard icon={BookOpen}   label="Today's Bookings"  value={stats.todayBookings}                     change={8}  color="bg-green-500" />
-            <StatCard icon={DollarSign} label="Today's Revenue"   value={`৳${stats.revenue?.toLocaleString()}`}  change={15} color="bg-purple-500" />
+            <StatCard icon={DollarSign} label="Today's Revenue"   value={`BDT ${stats.revenue?.toLocaleString()}`}  change={15} color="bg-purple-500" />
           </div>
 
           {/* Recent Bookings Table */}
@@ -153,7 +153,7 @@ export default function AdminDashboard() {
                       </td>
                       <td className="px-5 py-4">
                         <span className="text-sm font-semibold text-gray-900">
-                          {b.fare > 0 ? `৳${b.fare}` : '—'}
+                          {b.fare > 0 ? `BDT ${b.fare}` : '—'}
                         </span>
                       </td>
                       <td className="px-5 py-4">
