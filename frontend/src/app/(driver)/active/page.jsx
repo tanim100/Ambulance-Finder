@@ -321,12 +321,12 @@ export default function DriverActivePage() {
             ? { lat: trip.destinationHospital.lat, lng: trip.destinationHospital.lng }
             : (trip.userLocation || { lat: 23.8103, lng: 90.4125 });
 
-          const step = 0.0006;
+          const step = 0.00025;
           const dLat = target.lat - prev.lat;
           const dLng = target.lng - prev.lng;
           const dist = Math.sqrt(dLat * dLat + dLng * dLng);
 
-          if (dist < 0.0004) {
+          if (dist < 0.0002) {
             setIsSimulating(false);
             return prev;
           }
@@ -339,7 +339,7 @@ export default function DriverActivePage() {
             source: isHeadingToHospital ? `En Route to ${trip.destination}` : 'Simulated Movement Demo',
           };
         });
-      }, 2000);
+      }, 800);
     } else {
       clearInterval(simulationTimerRef.current);
     }
