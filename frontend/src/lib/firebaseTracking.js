@@ -155,7 +155,14 @@ export function subscribeToAmbulanceLocation(bookingId, onLocationUpdate) {
   // 1. Listen to Local BroadcastChannel
   const handleLocalBroadcast = (event) => {
     const data = event.data;
-    if (data && typeof data.lat === 'number' && typeof data.lng === 'number') {
+    // CRITICAL: Only process ambulance/driver locations.
+    // Reject patient_location/user_location so patient coords NEVER overwrite the ambulance!
+    if (
+      data &&
+      (data.type === 'ambulance_location' || data.type === 'driver_location') &&
+      typeof data.lat === 'number' &&
+      typeof data.lng === 'number'
+    ) {
       onLocationUpdate({
         lat: data.lat,
         lng: data.lng,
