@@ -476,8 +476,8 @@ export default function TrackingPage() {
         return;
       }
 
-      // Progress along route
-      const nextIdx = Math.min(simRouteIndexRef.current + 2, allPts.length - 1);
+      // Progress along route smoothly 1 step at a time
+      const nextIdx = Math.min(simRouteIndexRef.current + 1, allPts.length - 1);
       simRouteIndexRef.current = nextIdx;
       const nextPoint = allPts[nextIdx];
 
@@ -494,8 +494,15 @@ export default function TrackingPage() {
         lastUpdated: new Date().toLocaleTimeString(),
       });
 
-      // Stream to Firebase RTDB in real time!
-      updateAmbulanceLocation('active_trip', {
+      // Stream to Firebase RTDB Canonical locations/{requestId}/driver + legacy
+      updateDriverLiveLocation(id || 'active_trip', {
+        lat: newDriverLoc.lat,
+        lng: newDriverLoc.lng,
+        speed,
+        heading: 0,
+        status: currentStatus,
+      });
+      updateAmbulanceLocation(id || 'active_trip', {
         lat: newDriverLoc.lat,
         lng: newDriverLoc.lng,
         speed,
@@ -503,7 +510,7 @@ export default function TrackingPage() {
         status: currentStatus,
         source: tripPhase === 'pickup' ? 'En Route to Pickup' : `En Route to ${selectedHospital.name}`,
       });
-    }, 1200);
+    }, 650);
   };
 
   const pauseLiveMovement = () => {
