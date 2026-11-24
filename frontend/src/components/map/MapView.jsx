@@ -24,8 +24,8 @@ export const createAmbulanceIcon = (status = 'En Route') => {
       className: 'custom-ambulance-icon',
       html: `<div style="
         position: relative;
-        background: #DC2626;
-        border: 3px solid white;
+        background: linear-gradient(135deg, #EF4444 0%, #DC2626 100%);
+        border: 3px solid #FFFFFF;
         border-radius: 50%;
         width: 44px;
         height: 44px;
@@ -33,7 +33,7 @@ export const createAmbulanceIcon = (status = 'En Route') => {
         align-items: center;
         justify-content: center;
         font-size: 22px;
-        box-shadow: 0 4px 14px rgba(220,38,38,0.55);
+        box-shadow: 0 4px 16px rgba(220,38,38,0.55);
         cursor: pointer;
       ">
         🚑
@@ -46,6 +46,7 @@ export const createAmbulanceIcon = (status = 'En Route') => {
           background: #10B981;
           border: 2px solid white;
           border-radius: 50%;
+          box-shadow: 0 0 6px rgba(16,185,129,0.8);
         "></span>
       </div>`,
       iconSize: [44, 44],
@@ -62,27 +63,47 @@ export const createUserIcon = () => {
   if (!cachedUserIcon) {
     cachedUserIcon = L.divIcon({
       className: 'custom-user-icon',
-      html: `<div style="position: relative; width: 36px; height: 36px; display: flex; align-items: center; justify-content: center;">
+      html: `<div style="position: relative; width: 44px; height: 44px; display: flex; align-items: center; justify-content: center;">
         <div style="
           position: absolute;
-          width: 36px;
-          height: 36px;
-          background: rgba(37, 99, 235, 0.35);
+          width: 42px;
+          height: 42px;
+          background: rgba(37, 99, 235, 0.22);
           border-radius: 50%;
+          animation: pinPulseRipple 2s ease-out infinite;
         "></div>
         <div style="
           position: relative;
-          background: #2563EB;
-          border: 3px solid white;
+          background: linear-gradient(135deg, #2563EB 0%, #1D4ED8 100%);
+          border: 2.5px solid #FFFFFF;
           border-radius: 50%;
-          width: 20px;
-          height: 20px;
-          box-shadow: 0 2px 10px rgba(37,99,235,0.7);
-        "></div>
+          width: 28px;
+          height: 28px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          box-shadow: 0 4px 12px rgba(37,99,235,0.45);
+        ">
+          <span style="color: #FFFFFF; font-weight: 800; font-size: 13px; font-family: system-ui, -apple-system, sans-serif; line-height: 1;">A</span>
+        </div>
+        <div style="
+          position: absolute;
+          bottom: 2px;
+          background: #1D4ED8;
+          color: white;
+          font-size: 8.5px;
+          font-weight: 700;
+          padding: 1px 4px;
+          border-radius: 4px;
+          letter-spacing: 0.3px;
+          white-space: nowrap;
+          box-shadow: 0 2px 6px rgba(0,0,0,0.25);
+          transform: translateY(12px);
+        ">PICKUP</div>
       </div>`,
-      iconSize: [36, 36],
-      iconAnchor: [18, 18],
-      popupAnchor: [0, -18],
+      iconSize: [44, 44],
+      iconAnchor: [22, 22],
+      popupAnchor: [0, -22],
     });
   }
   return cachedUserIcon;
@@ -94,31 +115,57 @@ export const createHospitalIcon = () => {
   if (!cachedHospitalIcon) {
     cachedHospitalIcon = L.divIcon({
       className: 'custom-hospital-icon',
-      html: `<div style="
-        position: relative;
-        background: #059669;
-        border: 3px solid white;
-        border-radius: 50%;
-        width: 44px;
-        height: 44px;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        font-size: 22px;
-        box-shadow: 0 4px 14px rgba(5,150,105,0.6);
-        cursor: pointer;
-      ">
-        🏥
+      html: `<div style="position: relative; width: 44px; height: 44px; display: flex; align-items: center; justify-content: center;">
+        <div style="
+          position: absolute;
+          width: 42px;
+          height: 42px;
+          background: rgba(220, 38, 38, 0.2);
+          border-radius: 50%;
+          animation: pinPulseRipple 2s ease-out infinite;
+        "></div>
+        <div style="
+          position: relative;
+          background: linear-gradient(135deg, #DC2626 0%, #B91C1C 100%);
+          border: 2.5px solid #FFFFFF;
+          border-radius: 50%;
+          width: 28px;
+          height: 28px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          box-shadow: 0 4px 14px rgba(220,38,38,0.5);
+        ">
+          <span style="color: #FFFFFF; font-weight: 800; font-size: 13px; font-family: system-ui, -apple-system, sans-serif; line-height: 1;">B</span>
+        </div>
         <span style="
           position: absolute;
           top: -2px;
           right: -2px;
-          width: 12px;
-          height: 12px;
-          background: #EF4444;
-          border: 2px solid white;
+          background: white;
           border-radius: 50%;
-        "></span>
+          width: 15px;
+          height: 15px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          font-size: 10px;
+          box-shadow: 0 1px 4px rgba(0,0,0,0.25);
+        ">🏥</span>
+        <div style="
+          position: absolute;
+          bottom: 2px;
+          background: #DC2626;
+          color: white;
+          font-size: 8.5px;
+          font-weight: 700;
+          padding: 1px 4px;
+          border-radius: 4px;
+          letter-spacing: 0.3px;
+          white-space: nowrap;
+          box-shadow: 0 2px 6px rgba(0,0,0,0.25);
+          transform: translateY(12px);
+        ">HOSPITAL</div>
       </div>`,
       iconSize: [44, 44],
       iconAnchor: [22, 22],
@@ -261,11 +308,55 @@ export default function MapView({
 
   return (
     <div className={`relative rounded-2xl overflow-hidden ${className}`} style={{ height, width: '100%' }}>
-      {/* Global CSS for zero-jitter smooth marker gliding */}
+      {/* Floating Modern A -> B Navigation Route Badge */}
+      {route && route.length > 1 && (
+        <div className="absolute top-3 left-3 z-[1000] bg-white/95 dark:bg-slate-900/95 backdrop-blur-md px-3.5 py-1.5 rounded-xl shadow-lg border border-gray-200/90 dark:border-slate-700/90 flex items-center gap-2 pointer-events-none text-xs font-semibold select-none">
+          <div className="flex items-center gap-1.5">
+            <span className="w-5 h-5 rounded-full bg-blue-600 text-white flex items-center justify-center text-[10px] font-black shadow-sm">A</span>
+            <span className="text-gray-800 dark:text-gray-200 font-medium">
+              {effectiveUserLoc?.label || 'Pickup'}
+            </span>
+          </div>
+          <span className="text-blue-500 font-bold">➔</span>
+          <div className="flex items-center gap-1.5">
+            <span className="w-5 h-5 rounded-full bg-red-600 text-white flex items-center justify-center text-[10px] font-black shadow-sm">B</span>
+            <span className="text-gray-800 dark:text-gray-200 font-medium">
+              {hospitalLocation?.name ? (hospitalLocation.name.length > 22 ? hospitalLocation.name.slice(0, 20) + '…' : hospitalLocation.name) : 'Hospital'}
+            </span>
+          </div>
+        </div>
+      )}
+
+      {/* Global CSS for zero-jitter smooth marker gliding & route animation */}
       <style jsx global>{`
         .leaflet-marker-icon {
           transition: transform 0.6s linear !important;
           will-change: transform;
+        }
+        @keyframes routeDashFlow {
+          from {
+            stroke-dashoffset: 48;
+          }
+          to {
+            stroke-dashoffset: 0;
+          }
+        }
+        .leaflet-route-flow {
+          animation: routeDashFlow 2s linear infinite !important;
+        }
+        @keyframes pinPulseRipple {
+          0% {
+            transform: scale(0.9);
+            opacity: 0.8;
+          }
+          50% {
+            transform: scale(1.35);
+            opacity: 0.25;
+          }
+          100% {
+            transform: scale(1.7);
+            opacity: 0;
+          }
         }
       `}</style>
 
@@ -291,30 +382,55 @@ export default function MapView({
 
         {onLocationSelect && <MapClickHandler onLocationSelect={onLocationSelect} />}
 
-        {/* Route polyline — dual layer (glow + high-visibility dashed road navigation) */}
+        {/* Route polyline — Standard Google Maps & Uber style navigation polyline */}
         {route && route.length > 1 && (
           <>
-            {/* Outer Route Glow Layer */}
+            {/* 1. Ambient Drop Shadow / Soft Glow */}
             <Polyline
-              key={`glow-${route.length}-${route[0]?.[0]?.toFixed?.(3)}`}
+              key={`shadow-${route.length}-${route[0]?.[0]?.toFixed?.(3)}`}
               positions={route}
               pathOptions={{
-                color: '#2563EB',
-                weight: 8,
-                opacity: 0.45,
+                color: '#0F172A',
+                weight: 10,
+                opacity: 0.16,
                 lineCap: 'round',
                 lineJoin: 'round',
               }}
             />
-            {/* Inner High-Visibility Road Direction Layer */}
+            {/* 2. Navigation Road Casing / Border (Rich Royal Blue for High Contrast) */}
             <Polyline
-              key={`nav-${route.length}-${route[0]?.[0]?.toFixed?.(3)}`}
+              key={`casing-${route.length}-${route[0]?.[0]?.toFixed?.(3)}`}
               positions={route}
               pathOptions={{
-                color: '#DC2626',
-                weight: 5,
+                color: '#1E40AF',
+                weight: 7,
                 opacity: 0.95,
-                dashArray: '10, 8',
+                lineCap: 'round',
+                lineJoin: 'round',
+              }}
+            />
+            {/* 3. Core Solid Highway Navigation Line (Vibrant Electric Blue) */}
+            <Polyline
+              key={`core-${route.length}-${route[0]?.[0]?.toFixed?.(3)}`}
+              positions={route}
+              pathOptions={{
+                color: '#3B82F6',
+                weight: 4.5,
+                opacity: 1.0,
+                lineCap: 'round',
+                lineJoin: 'round',
+              }}
+            />
+            {/* 4. Directional Highway Centerline Flow (Subtle Animated Navigation Flow) */}
+            <Polyline
+              key={`flow-${route.length}-${route[0]?.[0]?.toFixed?.(3)}`}
+              positions={route}
+              pathOptions={{
+                color: '#E0F2FE',
+                weight: 1.8,
+                opacity: 0.85,
+                dashArray: '8, 16',
+                className: 'leaflet-route-flow',
                 lineCap: 'round',
                 lineJoin: 'round',
               }}
