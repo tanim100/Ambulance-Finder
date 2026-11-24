@@ -477,8 +477,9 @@ export default function RequestPage() {
     setBookingId(id);
 
     try {
-      // 1. Create request in Firebase Realtime Database (requests/{requestId} & locations/{requestId}/user)
-      await createAmbulanceRequest({
+      // 1. Firebase write — non-blocking with 4s timeout so it never hangs the form
+      //    If Firebase is not configured (no .env.local keys), this resolves instantly
+      const firebasePayload = {
         requestId: id,
         pickup: {
           lat: pickupCoords.lat,
@@ -503,16 +504,30 @@ export default function RequestPage() {
           ambulanceType: form.ambulanceType,
           notes: form.notes,
         },
+      };
+
+      // Race Firebase write against 4-second timeout — winner takes all, loser is ignored
+      Promise.race([
+        createAmbulanceRequest(firebasePayload),
+        new Promise((_, reject) =>
+          setTimeout(() => reject(new Error('Firebase timeout — skipped')), 4000)
+        ),
+      ]).catch((err) => {
+        console.warn('[Firebase non-critical]', err.message);
       });
 
-      // 2. Also register in Backend DB if online
+      // 2. Backend DB booking — this is the real booking record
       try {
-        await bookingAPI.create(payload);
-      } catch {}
+        const res = await bookingAPI.create(payload);
+        const realId = res?.data?.booking?.id || res?.data?.id;
+        if (realId) setBookingId(String(realId));
+      } catch (backendErr) {
+        console.warn('[Backend booking] using local ID:', backendErr?.message);
+      }
 
       setSubmitted(true);
     } catch (err) {
-      console.warn('Booking create fallback:', err);
+      console.warn('Booking submit error:', err);
       setSubmitted(true);
     } finally {
       setLoading(false);

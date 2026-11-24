@@ -29,7 +29,9 @@ let auth = null;
 try {
   app = !getApps().length ? initializeApp(firebaseConfig) : getApp();
   
-  if (firebaseConfig.databaseURL) {
+  // Only initialize RTDB if real Firebase credentials are configured
+  // Using demo/fallback URL causes network hangs on set() calls
+  if (isConfigured && firebaseConfig.databaseURL) {
     try {
       rtdb = getDatabase(app);
     } catch (e) {
