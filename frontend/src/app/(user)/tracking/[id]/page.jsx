@@ -407,35 +407,42 @@ export default function TrackingPage() {
   }, []);
 
   // Update route ONLY when phase switches or hospital changes (NEVER on micro GPS ticks!)
+  // Update route when phase switches, hospital changes, or driver location changes significantly
   useEffect(() => {
     if (isSimulating) return;
 
-    const targetKey = tripPhase === 'pickup'
-      ? `pickup_${patientPos?.lat?.toFixed?.(3)}_${patientPos?.lng?.toFixed?.(3)}`
-      : `hosp_${selectedHospital?.id}`;
-
-    if (lastRouteTargetRef.current === targetKey) return;
-
     if (tripPhase === 'pickup') {
-      if (patientPos) {
-        // Dispatch location ~1.5 km away from patient
-        const defaultDispatch = { lat: patientPos.lat - 0.008, lng: patientPos.lng + 0.010 };
-        const dist = driverPos && patientPos ? calculateDistance(driverPos.lat, driverPos.lng, patientPos.lat, patientPos.lng) : null;
-        const isTooClose = dist !== null && dist < 0.15;
-        const startPt = (!driverPos || isTooClose) ? defaultDispatch : driverPos;
+      if (!patientPos) return;
+      const defaultDispatch = { lat: patientPos.lat - 0.008, lng: patientPos.lng + 0.010 };
+      const dist = driverPos && patientPos ? calculateDistance(driverPos.lat, driverPos.lng, patientPos.lat, patientPos.lng) : null;
+      const isTooClose = dist !== null && dist < 0.15;
+      const startPt = (!driverPos || isTooClose) ? defaultDispatch : driverPos;
 
-        fetchRoadRoute(startPt, patientPos);
-        lastRouteTargetRef.current = targetKey;
-      }
+      const targetKey = `pickup_${startPt.lat?.toFixed?.(3)}_${startPt.lng?.toFixed?.(3)}_${patientPos.lat?.toFixed?.(3)}_${patientPos.lng?.toFixed?.(3)}`;
+      if (lastRouteTargetRef.current === targetKey) return;
+      lastRouteTargetRef.current = targetKey;
+
+      fetchRoadRoute(startPt, patientPos);
     } else {
       // Phase 2: Patient/Driver -> Destination Hospital
-      if (selectedHospital) {
-        const startPoint = driverPos || patientPos || { lat: 23.8282, lng: 90.4163 };
-        fetchRoadRoute(startPoint, { lat: selectedHospital.lat, lng: selectedHospital.lng });
-        lastRouteTargetRef.current = targetKey;
-      }
+      if (!selectedHospital) return;
+      const startPoint = driverPos || patientPos || { lat: 23.8282, lng: 90.4163 };
+      const targetKey = `hosp_${startPoint.lat?.toFixed?.(3)}_${startPoint.lng?.toFixed?.(3)}_${selectedHospital.id}`;
+      if (lastRouteTargetRef.current === targetKey) return;
+      lastRouteTargetRef.current = targetKey;
+
+      fetchRoadRoute(startPoint, { lat: selectedHospital.lat, lng: selectedHospital.lng });
     }
-  }, [tripPhase, selectedHospital?.id, Boolean(patientPos), isSimulating, fetchRoadRoute]);
+  }, [
+    tripPhase,
+    selectedHospital?.id,
+    patientPos?.lat,
+    patientPos?.lng,
+    driverPos?.lat,
+    driverPos?.lng,
+    isSimulating,
+    fetchRoadRoute,
+  ]);
 
   // ── 6. Live Movement Simulation Engine (Drive along real road) ──
   const startLiveMovement = async () => {
@@ -559,12 +566,26 @@ export default function TrackingPage() {
         setDriverPos(freshDriver);
         setBooking((prev) => ({ ...prev, status: 'En Route' }));
         fetchRoadRoute(freshDriver, patientPos);
+        updateDriverLiveLocation(id || 'active_trip', {
+          lat: freshDriver.lat,
+          lng: freshDriver.lng,
+          speed: 38,
+          heading: 0,
+          status: 'En Route',
+        });
       }
     } else {
       if (patientPos) {
         setDriverPos(patientPos);
         setBooking((prev) => ({ ...prev, status: 'Heading to Hospital' }));
         fetchRoadRoute(patientPos, { lat: selectedHospital.lat, lng: selectedHospital.lng });
+        updateDriverLiveLocation(id || 'active_trip', {
+          lat: patientPos.lat,
+          lng: patientPos.lng,
+          speed: 38,
+          heading: 0,
+          status: 'Heading to Hospital',
+        });
       }
     }
   };
@@ -915,7 +936,7 @@ export default function TrackingPage() {
         </div>
 
         {/* ── Leaflet Navigation Map ── */}
-        <div className="h-[440px] rounded-2xl overflow-hidden border border-gray-200 shadow-sm relative">
+        <div className="h-[480px] rounded-2xl overflow-hidden border border-gray-200/90 shadow-md relative ring-1 ring-black/5 bg-slate-100">
           <MapComponent
             pickupLat={mapCenter.pickupLat}
             pickupLng={mapCenter.pickupLng}

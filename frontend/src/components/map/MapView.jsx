@@ -1,8 +1,9 @@
 'use client';
 // src/components/map/MapView.jsx
-// Smooth, Jitter-Free Leaflet Map with Stable Singletons, Smooth Interpolation & Dual-Layer Road Routing
+// Professional Emergency Medical Dispatch & Turn-by-Turn Navigation Map
+// Features: 60FPS Hardware Gliding, CartoDB Voyager Clean Tiles, Strobe Beacons & Phase-Aware Framing
 
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState, useCallback } from 'react';
 import { MapContainer, TileLayer, Marker, Popup, useMap, Polyline, useMapEvents } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
@@ -15,43 +16,97 @@ L.Icon.Default.mergeOptions({
   shadowUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png',
 });
 
-// ── Static Cached Icons (Created ONCE so React never recreates DOM nodes) ──
+// ── Available Map Tile Presets ──
+export const MAP_TILES = {
+  voyager: {
+    id: 'voyager',
+    name: 'Clean Medical',
+    icon: '🏥',
+    url: 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png',
+    attribution: '&copy; CartoDB &copy; OpenStreetMap contributors',
+    maxZoom: 19,
+  },
+  standard: {
+    id: 'standard',
+    name: 'Street Map',
+    icon: '🗺️',
+    url: 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
+    attribution: '&copy; OpenStreetMap contributors',
+    maxZoom: 19,
+  },
+  dark: {
+    id: 'dark',
+    name: 'Night Dispatch',
+    icon: '🌙',
+    url: 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',
+    attribution: '&copy; CartoDB &copy; OpenStreetMap contributors',
+    maxZoom: 19,
+  },
+};
+
+// ── Static Cached Icons with Emergency Visuals ──
 let cachedAmbulanceIcon = null;
 export const createAmbulanceIcon = (status = 'En Route') => {
   if (typeof window === 'undefined') return null;
   if (!cachedAmbulanceIcon) {
     cachedAmbulanceIcon = L.divIcon({
       className: 'custom-ambulance-icon',
-      html: `<div style="
-        position: relative;
-        background: linear-gradient(135deg, #EF4444 0%, #DC2626 100%);
-        border: 3px solid #FFFFFF;
-        border-radius: 50%;
-        width: 44px;
-        height: 44px;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        font-size: 22px;
-        box-shadow: 0 4px 16px rgba(220,38,38,0.55);
-        cursor: pointer;
-      ">
-        🚑
-        <span style="
-          position: absolute;
-          top: -2px;
-          right: -2px;
-          width: 12px;
-          height: 12px;
-          background: #10B981;
-          border: 2px solid white;
-          border-radius: 50%;
-          box-shadow: 0 0 6px rgba(16,185,129,0.8);
-        "></span>
-      </div>`,
-      iconSize: [44, 44],
-      iconAnchor: [22, 22],
-      popupAnchor: [0, -22],
+      html: `
+        <div style="position: relative; width: 48px; height: 48px; display: flex; align-items: center; justify-content: center;">
+          <!-- Dual Alternating Emergency Strobe LED Beacons -->
+          <div style="
+            position: absolute;
+            top: -6px;
+            left: 50%;
+            transform: translateX(-50%);
+            display: flex;
+            gap: 3px;
+            z-index: 10;
+          ">
+            <span class="strobe-red" style="width: 7px; height: 7px; border-radius: 50%; background: #EF4444; border: 1.5px solid white; display: inline-block;"></span>
+            <span class="strobe-blue" style="width: 7px; height: 7px; border-radius: 50%; background: #3B82F6; border: 1.5px solid white; display: inline-block;"></span>
+          </div>
+
+          <!-- 3D Ambulance Badge -->
+          <div style="
+            position: relative;
+            background: linear-gradient(135deg, #EF4444 0%, #DC2626 100%);
+            border: 3px solid #FFFFFF;
+            border-radius: 50%;
+            width: 44px;
+            height: 44px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 22px;
+            box-shadow: 0 4px 18px rgba(220,38,38,0.6);
+            cursor: pointer;
+          ">
+            🚑
+          </div>
+
+          <!-- License Plate / Vehicle ID Tag -->
+          <div style="
+            position: absolute;
+            bottom: -15px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: #0F172A;
+            color: #F8FAFC;
+            font-size: 8.5px;
+            font-weight: 800;
+            padding: 1.5px 5px;
+            border-radius: 4px;
+            letter-spacing: 0.3px;
+            white-space: nowrap;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.35);
+            border: 1px solid rgba(255,255,255,0.15);
+          ">DHA-4421</div>
+        </div>
+      `,
+      iconSize: [48, 54],
+      iconAnchor: [24, 27],
+      popupAnchor: [0, -27],
     });
   }
   return cachedAmbulanceIcon;
@@ -63,47 +118,54 @@ export const createUserIcon = () => {
   if (!cachedUserIcon) {
     cachedUserIcon = L.divIcon({
       className: 'custom-user-icon',
-      html: `<div style="position: relative; width: 44px; height: 44px; display: flex; align-items: center; justify-content: center;">
-        <div style="
-          position: absolute;
-          width: 42px;
-          height: 42px;
-          background: rgba(37, 99, 235, 0.22);
-          border-radius: 50%;
-          animation: pinPulseRipple 2s ease-out infinite;
-        "></div>
-        <div style="
-          position: relative;
-          background: linear-gradient(135deg, #2563EB 0%, #1D4ED8 100%);
-          border: 2.5px solid #FFFFFF;
-          border-radius: 50%;
-          width: 28px;
-          height: 28px;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          box-shadow: 0 4px 12px rgba(37,99,235,0.45);
-        ">
-          <span style="color: #FFFFFF; font-weight: 800; font-size: 13px; font-family: system-ui, -apple-system, sans-serif; line-height: 1;">A</span>
+      html: `
+        <div style="position: relative; width: 46px; height: 46px; display: flex; align-items: center; justify-content: center;">
+          <!-- Expanding Radar Pulse Wave -->
+          <div class="animate-radar-sweep" style="
+            position: absolute;
+            width: 44px;
+            height: 44px;
+            background: rgba(37, 99, 235, 0.25);
+            border-radius: 50%;
+          "></div>
+
+          <!-- 3D Pickup Pin Core -->
+          <div style="
+            position: relative;
+            background: linear-gradient(135deg, #2563EB 0%, #1D4ED8 100%);
+            border: 2.5px solid #FFFFFF;
+            border-radius: 50%;
+            width: 28px;
+            height: 28px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            box-shadow: 0 4px 14px rgba(37,99,235,0.5);
+          ">
+            <span style="color: #FFFFFF; font-weight: 800; font-size: 13px; font-family: system-ui, -apple-system, sans-serif; line-height: 1;">📍</span>
+          </div>
+
+          <!-- Pickup Tag -->
+          <div style="
+            position: absolute;
+            bottom: -13px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: #1D4ED8;
+            color: white;
+            font-size: 8.5px;
+            font-weight: 800;
+            padding: 1.5px 5px;
+            border-radius: 4px;
+            letter-spacing: 0.4px;
+            white-space: nowrap;
+            box-shadow: 0 2px 6px rgba(0,0,0,0.25);
+          ">PATIENT PICKUP</div>
         </div>
-        <div style="
-          position: absolute;
-          bottom: 2px;
-          background: #1D4ED8;
-          color: white;
-          font-size: 8.5px;
-          font-weight: 700;
-          padding: 1px 4px;
-          border-radius: 4px;
-          letter-spacing: 0.3px;
-          white-space: nowrap;
-          box-shadow: 0 2px 6px rgba(0,0,0,0.25);
-          transform: translateY(12px);
-        ">PICKUP</div>
-      </div>`,
-      iconSize: [44, 44],
-      iconAnchor: [22, 22],
-      popupAnchor: [0, -22],
+      `,
+      iconSize: [46, 50],
+      iconAnchor: [23, 25],
+      popupAnchor: [0, -25],
     });
   }
   return cachedUserIcon;
@@ -115,68 +177,63 @@ export const createHospitalIcon = () => {
   if (!cachedHospitalIcon) {
     cachedHospitalIcon = L.divIcon({
       className: 'custom-hospital-icon',
-      html: `<div style="position: relative; width: 44px; height: 44px; display: flex; align-items: center; justify-content: center;">
-        <div style="
-          position: absolute;
-          width: 42px;
-          height: 42px;
-          background: rgba(220, 38, 38, 0.2);
-          border-radius: 50%;
-          animation: pinPulseRipple 2s ease-out infinite;
-        "></div>
-        <div style="
-          position: relative;
-          background: linear-gradient(135deg, #DC2626 0%, #B91C1C 100%);
-          border: 2.5px solid #FFFFFF;
-          border-radius: 50%;
-          width: 28px;
-          height: 28px;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          box-shadow: 0 4px 14px rgba(220,38,38,0.5);
-        ">
-          <span style="color: #FFFFFF; font-weight: 800; font-size: 13px; font-family: system-ui, -apple-system, sans-serif; line-height: 1;">B</span>
+      html: `
+        <div style="position: relative; width: 46px; height: 46px; display: flex; align-items: center; justify-content: center;">
+          <!-- Green Emergency Glow Wave -->
+          <div class="animate-radar-sweep" style="
+            position: absolute;
+            width: 44px;
+            height: 44px;
+            background: rgba(16, 185, 129, 0.22);
+            border-radius: 50%;
+          "></div>
+
+          <!-- 3D Medical Cross Core -->
+          <div style="
+            position: relative;
+            background: linear-gradient(135deg, #059669 0%, #047857 100%);
+            border: 2.5px solid #FFFFFF;
+            border-radius: 50%;
+            width: 32px;
+            height: 32px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 16px;
+            box-shadow: 0 4px 14px rgba(5,150,105,0.55);
+            cursor: pointer;
+          ">
+            🏥
+          </div>
+
+          <!-- Hospital Tag -->
+          <div style="
+            position: absolute;
+            bottom: -13px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: #047857;
+            color: white;
+            font-size: 8.5px;
+            font-weight: 800;
+            padding: 1.5px 5px;
+            border-radius: 4px;
+            letter-spacing: 0.4px;
+            white-space: nowrap;
+            box-shadow: 0 2px 6px rgba(0,0,0,0.25);
+          ">HOSPITAL ER</div>
         </div>
-        <span style="
-          position: absolute;
-          top: -2px;
-          right: -2px;
-          background: white;
-          border-radius: 50%;
-          width: 15px;
-          height: 15px;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          font-size: 10px;
-          box-shadow: 0 1px 4px rgba(0,0,0,0.25);
-        ">🏥</span>
-        <div style="
-          position: absolute;
-          bottom: 2px;
-          background: #DC2626;
-          color: white;
-          font-size: 8.5px;
-          font-weight: 700;
-          padding: 1px 4px;
-          border-radius: 4px;
-          letter-spacing: 0.3px;
-          white-space: nowrap;
-          box-shadow: 0 2px 6px rgba(0,0,0,0.25);
-          transform: translateY(12px);
-        ">HOSPITAL</div>
-      </div>`,
-      iconSize: [44, 44],
-      iconAnchor: [22, 22],
-      popupAnchor: [0, -22],
+      `,
+      iconSize: [46, 50],
+      iconAnchor: [23, 25],
+      popupAnchor: [0, -25],
     });
   }
   return cachedHospitalIcon;
 };
 
 // ── Smooth 60FPS Animated Marker with requestAnimationFrame Interpolation ──
-function SmoothMarker({ position, icon, duration = 900, children, eventHandlers }) {
+function SmoothMarker({ position, icon, duration = 800, children, eventHandlers }) {
   const markerRef = useRef(null);
   const animFrameRef = useRef(null);
   const currentPosRef = useRef(position);
@@ -243,33 +300,112 @@ function SmoothMarker({ position, icon, duration = 900, children, eventHandlers 
   );
 }
 
-// ── Smart Bounds Fitter (Fits camera ONCE per phase or hospital switch, NEVER on micro GPS ticks) ──
+// ── Smart Bounds Fitter (Phase-Aware: Fits only the active leg of the trip) ──
 function MapFitBounds({ userLocation, driverLocation, hospitalLocation, phaseKey }) {
   const map = useMap();
   const lastKeyRef = useRef('');
 
   useEffect(() => {
-    const key = `${phaseKey || 'def'}_${hospitalLocation?.name || 'none'}_${Boolean(userLocation)}_${Boolean(driverLocation)}`;
-    if (lastKeyRef.current === key) return;
+    const isHospital = phaseKey?.toLowerCase().includes('hospital');
 
     const validPoints = [];
-    if (userLocation?.lat && userLocation?.lng) validPoints.push([userLocation.lat, userLocation.lng]);
-    if (driverLocation?.lat && driverLocation?.lng) validPoints.push([driverLocation.lat, driverLocation.lng]);
-    if (hospitalLocation?.lat && hospitalLocation?.lng) validPoints.push([hospitalLocation.lat, hospitalLocation.lng]);
+    if (driverLocation?.lat && driverLocation?.lng) {
+      validPoints.push([driverLocation.lat, driverLocation.lng]);
+    }
+
+    if (isHospital) {
+      if (hospitalLocation?.lat && hospitalLocation?.lng) {
+        validPoints.push([hospitalLocation.lat, hospitalLocation.lng]);
+      } else if (userLocation?.lat && userLocation?.lng) {
+        validPoints.push([userLocation.lat, userLocation.lng]);
+      }
+    } else {
+      // Pickup Phase: Camera focuses tightly on Ambulance + Patient
+      if (userLocation?.lat && userLocation?.lng) {
+        validPoints.push([userLocation.lat, userLocation.lng]);
+      }
+    }
+
+    const key = `${isHospital ? 'hosp' : 'pickup'}_${validPoints.map(p => `${p[0].toFixed(2)}_${p[1].toFixed(2)}`).join('-')}`;
+    if (lastKeyRef.current === key) return;
+    lastKeyRef.current = key;
 
     if (validPoints.length >= 2) {
       try {
         const bounds = L.latLngBounds(validPoints);
-        map.fitBounds(bounds, { padding: [50, 50], maxZoom: 15, animate: true, duration: 0.6 });
-        lastKeyRef.current = key;
+        map.fitBounds(bounds, { padding: [55, 55], maxZoom: 15, animate: true, duration: 0.8 });
       } catch {}
-    } else if (validPoints.length === 1 && !lastKeyRef.current) {
-      map.setView(validPoints[0], 15, { animate: false });
-      lastKeyRef.current = key;
+    } else if (validPoints.length === 1) {
+      map.setView(validPoints[0], 15, { animate: true, duration: 0.8 });
     }
   }, [userLocation, driverLocation, hospitalLocation, phaseKey, map]);
 
   return null;
+}
+
+// ── Floating In-Map Controller Toolbar ──
+function MapControls({ driverLocation, route, tileStyle, onTileChange }) {
+  const map = useMap();
+
+  const handleCenterAmbulance = () => {
+    if (driverLocation?.lat && driverLocation?.lng) {
+      map.flyTo([driverLocation.lat, driverLocation.lng], 16, { animate: true, duration: 0.8 });
+    }
+  };
+
+  const handleFitRoute = () => {
+    if (route && route.length > 1) {
+      const bounds = L.latLngBounds(route);
+      map.fitBounds(bounds, { padding: [50, 50], maxZoom: 16, animate: true, duration: 0.8 });
+    }
+  };
+
+  const toggleTile = () => {
+    const keys = Object.keys(MAP_TILES);
+    const nextIdx = (keys.indexOf(tileStyle) + 1) % keys.length;
+    onTileChange(keys[nextIdx]);
+  };
+
+  const currentTile = MAP_TILES[tileStyle] || MAP_TILES.voyager;
+
+  return (
+    <div className="absolute bottom-4 right-3 z-[1000] flex flex-col gap-1.5 select-none pointer-events-auto">
+      {/* Re-center / Follow Ambulance */}
+      <button
+        type="button"
+        onClick={handleCenterAmbulance}
+        className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold bg-white/95 dark:bg-slate-900/95 text-rose-600 dark:text-rose-400 shadow-md border border-gray-200/90 dark:border-slate-700/90 hover:bg-rose-50 dark:hover:bg-slate-800 transition-all active:scale-95"
+        title="Follow Ambulance GPS"
+      >
+        <span>🎯</span>
+        <span>Follow 🚑</span>
+      </button>
+
+      {/* Fit Entire Route */}
+      {route && route.length > 1 && (
+        <button
+          type="button"
+          onClick={handleFitRoute}
+          className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold bg-white/95 dark:bg-slate-900/95 text-blue-600 dark:text-blue-400 shadow-md border border-gray-200/90 dark:border-slate-700/90 hover:bg-blue-50 dark:hover:bg-slate-800 transition-all active:scale-95"
+          title="Fit Active Road Route"
+        >
+          <span>🔄</span>
+          <span>Fit Route</span>
+        </button>
+      )}
+
+      {/* Map Tile Style Switcher */}
+      <button
+        type="button"
+        onClick={toggleTile}
+        className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-medium bg-white/95 dark:bg-slate-900/95 text-gray-700 dark:text-gray-300 shadow-md border border-gray-200/90 dark:border-slate-700/90 hover:bg-gray-50 dark:hover:bg-slate-800 transition-all active:scale-95"
+        title="Change Map Style"
+      >
+        <span>{currentTile.icon}</span>
+        <span>{currentTile.name}</span>
+      </button>
+    </div>
+  );
 }
 
 // ── Map Click Listener to pick location ──
@@ -298,6 +434,8 @@ export default function MapView({
   className = '',
   height = '100%',
 }) {
+  const [tileStyle, setTileStyle] = useState('voyager'); // Default to modern clean CartoDB Voyager
+
   const effectiveUserLoc = userLocation && typeof userLocation.lat === 'number' && typeof userLocation.lng === 'number'
     ? userLocation
     : null;
@@ -306,40 +444,59 @@ export default function MapView({
   const userIcon = createUserIcon();
   const hospIcon = createHospitalIcon();
 
+  const isHospitalPhase = phaseKey?.toLowerCase().includes('hospital');
+  const currentTile = MAP_TILES[tileStyle] || MAP_TILES.voyager;
+
   return (
     <div className={`relative rounded-2xl overflow-hidden ${className}`} style={{ height, width: '100%' }}>
-      {/* Floating Modern A -> B Navigation Route Badge */}
-      {route && route.length > 1 && (
-        <div className="absolute top-3 left-3 z-[1000] bg-white/95 dark:bg-slate-900/95 backdrop-blur-md px-3.5 py-1.5 rounded-xl shadow-lg border border-gray-200/90 dark:border-slate-700/90 flex items-center gap-2 pointer-events-none text-xs font-semibold select-none">
-          <div className="flex items-center gap-1.5">
-            <span className="w-5 h-5 rounded-full bg-blue-600 text-white flex items-center justify-center text-[10px] font-black shadow-sm">A</span>
-            <span className="text-gray-800 dark:text-gray-200 font-medium">
-              {effectiveUserLoc?.label || 'Pickup'}
-            </span>
-          </div>
-          <span className="text-blue-500 font-bold">➔</span>
-          <div className="flex items-center gap-1.5">
-            <span className="w-5 h-5 rounded-full bg-red-600 text-white flex items-center justify-center text-[10px] font-black shadow-sm">B</span>
-            <span className="text-gray-800 dark:text-gray-200 font-medium">
-              {hospitalLocation?.name ? (hospitalLocation.name.length > 22 ? hospitalLocation.name.slice(0, 20) + '…' : hospitalLocation.name) : 'Hospital'}
-            </span>
-          </div>
-        </div>
-      )}
+      {/* Dynamic Floating Navigation Route Badge (Phase-Aware) */}
+      <div className="absolute top-3 left-3 z-[1000] bg-white/95 dark:bg-slate-900/95 backdrop-blur-md px-3.5 py-1.5 rounded-xl shadow-lg border border-gray-200/90 dark:border-slate-700/90 flex items-center gap-2 pointer-events-none text-xs font-semibold select-none">
+        {isHospitalPhase ? (
+          <>
+            <div className="flex items-center gap-1.5">
+              <span className="w-5 h-5 rounded-full bg-rose-600 text-white flex items-center justify-center text-[10px] font-black shadow-xs">🚑</span>
+              <span className="text-gray-900 dark:text-gray-100 font-bold">Ambulance (Patient Onboard)</span>
+            </div>
+            <span className="text-emerald-500 font-bold">➔</span>
+            <div className="flex items-center gap-1.5">
+              <span className="w-5 h-5 rounded-full bg-emerald-600 text-white flex items-center justify-center text-[10px] font-black shadow-xs">🏥</span>
+              <span className="text-emerald-800 dark:text-emerald-300 font-bold">
+                {hospitalLocation?.name ? (hospitalLocation.name.length > 24 ? hospitalLocation.name.slice(0, 22) + '…' : hospitalLocation.name) : 'Hospital ER'}
+              </span>
+            </div>
+          </>
+        ) : (
+          <>
+            <div className="flex items-center gap-1.5">
+              <span className="w-5 h-5 rounded-full bg-rose-600 text-white flex items-center justify-center text-[10px] font-black shadow-xs">🚑</span>
+              <span className="text-gray-900 dark:text-gray-100 font-bold">Ambulance DHA-4421</span>
+            </div>
+            <span className="text-blue-500 font-bold">➔</span>
+            <div className="flex items-center gap-1.5">
+              <span className="w-5 h-5 rounded-full bg-blue-600 text-white flex items-center justify-center text-[10px] font-black shadow-xs">📍</span>
+              <span className="text-blue-700 dark:text-blue-300 font-bold">
+                {effectiveUserLoc?.label || 'Patient Pickup Point'}
+              </span>
+            </div>
+          </>
+        )}
+      </div>
 
       <MapContainer
         center={center}
         zoom={zoom}
         style={{ width: '100%', height: '100%' }}
-        zoomControl={true}
+        zoomControl={false}
         attributionControl={false}
       >
         <TileLayer
-          url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-          attribution='&copy; OpenStreetMap contributors'
+          key={currentTile.id}
+          url={currentTile.url}
+          attribution={currentTile.attribution}
+          maxZoom={currentTile.maxZoom}
         />
 
-        {/* Fits bounds smoothly when phase/hospital changes, completely silent during GPS movement */}
+        {/* Phase-Aware Camera Bounds Fitter */}
         <MapFitBounds
           userLocation={effectiveUserLoc}
           driverLocation={driverLocation}
@@ -347,53 +504,61 @@ export default function MapView({
           phaseKey={phaseKey}
         />
 
+        {/* Floating In-Map Camera & Tile Controls */}
+        <MapControls
+          driverLocation={driverLocation}
+          route={route}
+          tileStyle={tileStyle}
+          onTileChange={setTileStyle}
+        />
+
         {onLocationSelect && <MapClickHandler onLocationSelect={onLocationSelect} />}
 
-        {/* Route polyline — Standard Google Maps & Uber style navigation polyline */}
+        {/* Professional Multi-Layer Turn-by-Turn Road Route */}
         {route && route.length > 1 && (
           <>
-            {/* 1. Ambient Drop Shadow / Soft Glow */}
+            {/* 1. Ambient Drop Shadow Layer */}
             <Polyline
               key={`shadow-${route.length}-${route[0]?.[0]?.toFixed?.(3)}`}
               positions={route}
               pathOptions={{
                 color: '#0F172A',
                 weight: 10,
-                opacity: 0.16,
+                opacity: 0.18,
                 lineCap: 'round',
                 lineJoin: 'round',
               }}
             />
-            {/* 2. Navigation Road Casing / Border (Rich Royal Blue for High Contrast) */}
+            {/* 2. Casing Border (High Contrast) */}
             <Polyline
               key={`casing-${route.length}-${route[0]?.[0]?.toFixed?.(3)}`}
               positions={route}
               pathOptions={{
-                color: '#1E40AF',
+                color: isHospitalPhase ? '#047857' : '#1E40AF',
                 weight: 7,
                 opacity: 0.95,
                 lineCap: 'round',
                 lineJoin: 'round',
               }}
             />
-            {/* 3. Core Solid Highway Navigation Line (Vibrant Electric Blue) */}
+            {/* 3. Core Highway Navigation Line */}
             <Polyline
               key={`core-${route.length}-${route[0]?.[0]?.toFixed?.(3)}`}
               positions={route}
               pathOptions={{
-                color: '#3B82F6',
+                color: isHospitalPhase ? '#10B981' : '#3B82F6',
                 weight: 4.5,
                 opacity: 1.0,
                 lineCap: 'round',
                 lineJoin: 'round',
               }}
             />
-            {/* 4. Directional Highway Centerline Flow (Subtle Animated Navigation Flow) */}
+            {/* 4. Directional Highway Centerline Flow */}
             <Polyline
               key={`flow-${route.length}-${route[0]?.[0]?.toFixed?.(3)}`}
               positions={route}
               pathOptions={{
-                color: '#E0F2FE',
+                color: '#FFFFFF',
                 weight: 1.8,
                 opacity: 0.85,
                 dashArray: '8, 16',
@@ -413,11 +578,16 @@ export default function MapView({
             duration={800}
           >
             <Popup>
-              <div className="text-center p-1">
-                <p className="font-bold text-sm text-blue-600">📍 {effectiveUserLoc.label || 'Patient Pickup'}</p>
+              <div className="text-center p-1.5 min-w-[170px]">
+                <p className="font-bold text-sm text-blue-600 flex items-center justify-center gap-1">
+                  📍 {effectiveUserLoc.label || 'Patient Pickup'}
+                </p>
                 <p className="text-xs text-gray-500 font-mono mt-0.5">
                   {effectiveUserLoc.lat.toFixed(4)}, {effectiveUserLoc.lng.toFixed(4)}
                 </p>
+                <div className="mt-1 text-[11px] bg-blue-50 text-blue-700 py-0.5 px-2 rounded font-semibold">
+                  Ready for Emergency Boarding
+                </div>
               </div>
             </Popup>
           </SmoothMarker>
@@ -430,11 +600,11 @@ export default function MapView({
             icon={hospIcon}
           >
             <Popup>
-              <div className="text-center p-1.5 min-w-[180px]">
+              <div className="text-center p-1.5 min-w-[190px]">
                 <p className="font-bold text-sm text-emerald-800 flex items-center justify-center gap-1">
                   🏥 {hospitalLocation.name || 'Destination Hospital'}
                 </p>
-                <p className="text-xs text-gray-500 mt-0.5">{hospitalLocation.area || 'Emergency Center'}</p>
+                <p className="text-xs text-gray-500 mt-0.5">{hospitalLocation.area || 'Emergency Department'}</p>
                 {hospitalLocation.emergency && (
                   <p className="text-[11px] text-emerald-600 font-medium mt-1 bg-emerald-50 py-0.5 px-1.5 rounded">
                     {hospitalLocation.emergency}
@@ -453,7 +623,7 @@ export default function MapView({
           </Marker>
         )}
 
-        {/* Nearby Ambulance markers */}
+        {/* Nearby Active Ambulance Fleet */}
         {ambulances.map((amb, i) => (
           <Marker
             key={amb._id || i}
@@ -476,7 +646,7 @@ export default function MapView({
           </Marker>
         ))}
 
-        {/* Assigned Driver Live Marker (Smooth 60fps Interpolation) */}
+        {/* Assigned Ambulance Live Marker (Smooth 60fps Interpolation) */}
         {driverLocation && typeof driverLocation.lat === 'number' && typeof driverLocation.lng === 'number' && (
           <SmoothMarker
             position={[driverLocation.lat, driverLocation.lng]}
@@ -484,16 +654,24 @@ export default function MapView({
             duration={800}
           >
             <Popup>
-              <div className="text-center p-1">
-                <p className="font-bold text-sm text-red-600">🚑 Ambulance Live Location</p>
-                <p className="text-xs text-gray-600 font-mono mt-0.5">
+              <div className="text-center p-1.5 min-w-[180px]">
+                <p className="font-bold text-sm text-red-600 flex items-center justify-center gap-1">
+                  🚑 Live Ambulance GPS
+                </p>
+                <p className="text-xs text-gray-700 font-semibold mt-0.5">
+                  DHA-AMB-4421 (ALS Unit)
+                </p>
+                <p className="text-[11px] text-gray-500 font-mono mt-0.5">
                   Lat: {driverLocation.lat.toFixed(4)}, Lng: {driverLocation.lng.toFixed(4)}
                 </p>
-                {driverLocation.speed && (
-                  <p className="text-[11px] text-emerald-600 font-semibold mt-0.5">
-                    Speed: {driverLocation.speed} km/h
-                  </p>
-                )}
+                <div className="mt-1 flex items-center justify-center gap-2 text-[11px]">
+                  <span className="text-emerald-600 font-bold bg-emerald-50 px-1.5 py-0.5 rounded">
+                    ⚡ {driverLocation.speed || 38} km/h
+                  </span>
+                  <span className="text-blue-600 font-bold bg-blue-50 px-1.5 py-0.5 rounded">
+                    🟢 Live GPS
+                  </span>
+                </div>
               </div>
             </Popup>
           </SmoothMarker>
