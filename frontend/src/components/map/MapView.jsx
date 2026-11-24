@@ -16,30 +16,30 @@ L.Icon.Default.mergeOptions({
   shadowUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png',
 });
 
-// ── Available Map Tile Presets ──
+// ── Available Map Tile Presets (100% Free, High Reliability, No API Key Required) ──
 export const MAP_TILES = {
-  voyager: {
-    id: 'voyager',
-    name: 'Clean Medical',
-    icon: '🏥',
-    url: 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png',
-    attribution: '&copy; CartoDB &copy; OpenStreetMap contributors',
-    maxZoom: 19,
-  },
   standard: {
     id: 'standard',
-    name: 'Street Map',
+    name: 'OpenStreetMap',
     icon: '🗺️',
     url: 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
     attribution: '&copy; OpenStreetMap contributors',
     maxZoom: 19,
   },
-  dark: {
-    id: 'dark',
-    name: 'Night Dispatch',
-    icon: '🌙',
-    url: 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',
-    attribution: '&copy; CartoDB &copy; OpenStreetMap contributors',
+  esri: {
+    id: 'esri',
+    name: 'Clean Streets',
+    icon: '🏥',
+    url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}',
+    attribution: '&copy; Esri &mdash; Esri, DeLorme, NAVTEQ',
+    maxZoom: 18,
+  },
+  hot: {
+    id: 'hot',
+    name: 'Humanitarian ER',
+    icon: '🚑',
+    url: 'https://{s}.tile.openstreetmap.fr/hot/{z}/{x}/{y}.png',
+    attribution: '&copy; OpenStreetMap contributors, Humanitarian OpenStreetMap Team',
     maxZoom: 19,
   },
 };
@@ -366,20 +366,22 @@ function MapControls({ driverLocation, route, tileStyle, onTileChange }) {
     onTileChange(keys[nextIdx]);
   };
 
-  const currentTile = MAP_TILES[tileStyle] || MAP_TILES.voyager;
+  const currentTile = MAP_TILES[tileStyle] || MAP_TILES.standard;
 
   return (
     <div className="absolute bottom-4 right-3 z-[1000] flex flex-col gap-1.5 select-none pointer-events-auto">
-      {/* Re-center / Follow Ambulance */}
-      <button
-        type="button"
-        onClick={handleCenterAmbulance}
-        className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold bg-white/95 dark:bg-slate-900/95 text-rose-600 dark:text-rose-400 shadow-md border border-gray-200/90 dark:border-slate-700/90 hover:bg-rose-50 dark:hover:bg-slate-800 transition-all active:scale-95"
-        title="Follow Ambulance GPS"
-      >
-        <span>🎯</span>
-        <span>Follow 🚑</span>
-      </button>
+      {/* Re-center / Follow Ambulance (Only when active driver route exists) */}
+      {driverLocation && route && route.length > 1 && (
+        <button
+          type="button"
+          onClick={handleCenterAmbulance}
+          className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold bg-white/95 dark:bg-slate-900/95 text-rose-600 dark:text-rose-400 shadow-md border border-gray-200/90 dark:border-slate-700/90 hover:bg-rose-50 dark:hover:bg-slate-800 transition-all active:scale-95"
+          title="Follow Ambulance GPS"
+        >
+          <span>🎯</span>
+          <span>Follow 🚑</span>
+        </button>
+      )}
 
       {/* Fit Entire Route */}
       {route && route.length > 1 && (
@@ -434,7 +436,7 @@ export default function MapView({
   className = '',
   height = '100%',
 }) {
-  const [tileStyle, setTileStyle] = useState('voyager'); // Default to modern clean CartoDB Voyager
+  const [tileStyle, setTileStyle] = useState('standard'); // Default to 100% Free OpenStreetMap (Zero watermarks)
 
   const effectiveUserLoc = userLocation && typeof userLocation.lat === 'number' && typeof userLocation.lng === 'number'
     ? userLocation
@@ -445,42 +447,44 @@ export default function MapView({
   const hospIcon = createHospitalIcon();
 
   const isHospitalPhase = phaseKey?.toLowerCase().includes('hospital');
-  const currentTile = MAP_TILES[tileStyle] || MAP_TILES.voyager;
+  const currentTile = MAP_TILES[tileStyle] || MAP_TILES.standard;
 
   return (
     <div className={`relative rounded-2xl overflow-hidden ${className}`} style={{ height, width: '100%' }}>
-      {/* Dynamic Floating Navigation Route Badge (Phase-Aware) */}
-      <div className="absolute top-3 left-3 z-[1000] bg-white/95 dark:bg-slate-900/95 backdrop-blur-md px-3.5 py-1.5 rounded-xl shadow-lg border border-gray-200/90 dark:border-slate-700/90 flex items-center gap-2 pointer-events-none text-xs font-semibold select-none">
-        {isHospitalPhase ? (
-          <>
-            <div className="flex items-center gap-1.5">
-              <span className="w-5 h-5 rounded-full bg-rose-600 text-white flex items-center justify-center text-[10px] font-black shadow-xs">🚑</span>
-              <span className="text-gray-900 dark:text-gray-100 font-bold">Ambulance (Patient Onboard)</span>
-            </div>
-            <span className="text-emerald-500 font-bold">➔</span>
-            <div className="flex items-center gap-1.5">
-              <span className="w-5 h-5 rounded-full bg-emerald-600 text-white flex items-center justify-center text-[10px] font-black shadow-xs">🏥</span>
-              <span className="text-emerald-800 dark:text-emerald-300 font-bold">
-                {hospitalLocation?.name ? (hospitalLocation.name.length > 24 ? hospitalLocation.name.slice(0, 22) + '…' : hospitalLocation.name) : 'Hospital ER'}
-              </span>
-            </div>
-          </>
-        ) : (
-          <>
-            <div className="flex items-center gap-1.5">
-              <span className="w-5 h-5 rounded-full bg-rose-600 text-white flex items-center justify-center text-[10px] font-black shadow-xs">🚑</span>
-              <span className="text-gray-900 dark:text-gray-100 font-bold">Ambulance DHA-4421</span>
-            </div>
-            <span className="text-blue-500 font-bold">➔</span>
-            <div className="flex items-center gap-1.5">
-              <span className="w-5 h-5 rounded-full bg-blue-600 text-white flex items-center justify-center text-[10px] font-black shadow-xs">📍</span>
-              <span className="text-blue-700 dark:text-blue-300 font-bold">
-                {effectiveUserLoc?.label || 'Patient Pickup Point'}
-              </span>
-            </div>
-          </>
-        )}
-      </div>
+      {/* Dynamic Floating Navigation Route Badge (Phase-Aware) — ONLY rendered when active route exists! */}
+      {route && route.length > 1 && (
+        <div className="absolute top-3 left-3 z-[1000] bg-white/95 dark:bg-slate-900/95 backdrop-blur-md px-3.5 py-1.5 rounded-xl shadow-lg border border-gray-200/90 dark:border-slate-700/90 flex items-center gap-2 pointer-events-none text-xs font-semibold select-none">
+          {isHospitalPhase ? (
+            <>
+              <div className="flex items-center gap-1.5">
+                <span className="w-5 h-5 rounded-full bg-rose-600 text-white flex items-center justify-center text-[10px] font-black shadow-xs">🚑</span>
+                <span className="text-gray-900 dark:text-gray-100 font-bold">Ambulance (Patient Onboard)</span>
+              </div>
+              <span className="text-emerald-500 font-bold">➔</span>
+              <div className="flex items-center gap-1.5">
+                <span className="w-5 h-5 rounded-full bg-emerald-600 text-white flex items-center justify-center text-[10px] font-black shadow-xs">🏥</span>
+                <span className="text-emerald-800 dark:text-emerald-300 font-bold">
+                  {hospitalLocation?.name ? (hospitalLocation.name.length > 24 ? hospitalLocation.name.slice(0, 22) + '…' : hospitalLocation.name) : 'Hospital ER'}
+                </span>
+              </div>
+            </>
+          ) : (
+            <>
+              <div className="flex items-center gap-1.5">
+                <span className="w-5 h-5 rounded-full bg-rose-600 text-white flex items-center justify-center text-[10px] font-black shadow-xs">🚑</span>
+                <span className="text-gray-900 dark:text-gray-100 font-bold">Ambulance DHA-4421</span>
+              </div>
+              <span className="text-blue-500 font-bold">➔</span>
+              <div className="flex items-center gap-1.5">
+                <span className="w-5 h-5 rounded-full bg-blue-600 text-white flex items-center justify-center text-[10px] font-black shadow-xs">📍</span>
+                <span className="text-blue-700 dark:text-blue-300 font-bold">
+                  {effectiveUserLoc?.label || 'Patient Pickup Point'}
+                </span>
+              </div>
+            </>
+          )}
+        </div>
+      )}
 
       <MapContainer
         center={center}
