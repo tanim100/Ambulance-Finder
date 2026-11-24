@@ -128,6 +128,74 @@ export const createHospitalIcon = () => {
   return cachedHospitalIcon;
 };
 
+// ── Smooth 60FPS Animated Marker with requestAnimationFrame Interpolation ──
+function SmoothMarker({ position, icon, duration = 900, children, eventHandlers }) {
+  const markerRef = useRef(null);
+  const animFrameRef = useRef(null);
+  const currentPosRef = useRef(position);
+  const targetPosRef = useRef(position);
+  const startTimeRef = useRef(null);
+  const fromPosRef = useRef(position);
+
+  useEffect(() => {
+    if (!position || typeof position[0] !== 'number' || typeof position[1] !== 'number') return;
+
+    // Check if position actually moved
+    if (
+      currentPosRef.current &&
+      currentPosRef.current[0] === position[0] &&
+      currentPosRef.current[1] === position[1]
+    ) {
+      return;
+    }
+
+    fromPosRef.current = currentPosRef.current || position;
+    targetPosRef.current = position;
+    startTimeRef.current = performance.now();
+
+    const animate = (time) => {
+      if (!markerRef.current) return;
+      const elapsed = time - startTimeRef.current;
+      const progress = Math.min(1, elapsed / duration);
+
+      // Smooth ease-out cubic interpolation: 1 - (1 - progress)^3
+      const ease = 1 - Math.pow(1 - progress, 3);
+
+      const lat = fromPosRef.current[0] + (targetPosRef.current[0] - fromPosRef.current[0]) * ease;
+      const lng = fromPosRef.current[1] + (targetPosRef.current[1] - fromPosRef.current[1]) * ease;
+
+      currentPosRef.current = [lat, lng];
+      try {
+        markerRef.current.setLatLng([lat, lng]);
+      } catch {}
+
+      if (progress < 1) {
+        animFrameRef.current = requestAnimationFrame(animate);
+      }
+    };
+
+    if (animFrameRef.current) cancelAnimationFrame(animFrameRef.current);
+    animFrameRef.current = requestAnimationFrame(animate);
+
+    return () => {
+      if (animFrameRef.current) cancelAnimationFrame(animFrameRef.current);
+    };
+  }, [position?.[0], position?.[1], duration]);
+
+  if (!position || typeof position[0] !== 'number' || typeof position[1] !== 'number') return null;
+
+  return (
+    <Marker
+      ref={markerRef}
+      position={position}
+      icon={icon}
+      eventHandlers={eventHandlers}
+    >
+      {children}
+    </Marker>
+  );
+}
+
 // ── Smart Bounds Fitter (Fits camera ONCE per phase or hospital switch, NEVER on micro GPS ticks) ──
 function MapFitBounds({ userLocation, driverLocation, hospitalLocation, phaseKey }) {
   const map = useMap();
@@ -254,11 +322,12 @@ export default function MapView({
           </>
         )}
 
-        {/* User / Patient Pickup Location Marker */}
+        {/* User / Patient Pickup Location Marker (Smooth 60fps Interpolation) */}
         {effectiveUserLoc && (
-          <Marker
+          <SmoothMarker
             position={[effectiveUserLoc.lat, effectiveUserLoc.lng]}
             icon={userIcon}
+            duration={800}
           >
             <Popup>
               <div className="text-center p-1">
@@ -268,7 +337,7 @@ export default function MapView({
                 </p>
               </div>
             </Popup>
-          </Marker>
+          </SmoothMarker>
         )}
 
         {/* Destination Hospital Marker */}
@@ -324,11 +393,12 @@ export default function MapView({
           </Marker>
         ))}
 
-        {/* Assigned Driver Live Marker */}
+        {/* Assigned Driver Live Marker (Smooth 60fps Interpolation) */}
         {driverLocation && typeof driverLocation.lat === 'number' && typeof driverLocation.lng === 'number' && (
-          <Marker
+          <SmoothMarker
             position={[driverLocation.lat, driverLocation.lng]}
             icon={ambIcon}
+            duration={800}
           >
             <Popup>
               <div className="text-center p-1">
@@ -343,7 +413,7 @@ export default function MapView({
                 )}
               </div>
             </Popup>
-          </Marker>
+          </SmoothMarker>
         )}
       </MapContainer>
     </div>
