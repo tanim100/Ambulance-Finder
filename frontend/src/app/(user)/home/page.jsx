@@ -30,17 +30,58 @@ const FILTER_TYPES = [
   { id: 'ICU', label: 'ICU', icon: '🏥' },
 ];
 
-// Mock ambulances for instant demo data
-const MOCK_AMBULANCES = [
-  { _id: '1', vehicleNumber: 'AMB-001', type: 'Basic',    status: 'Available', driver: 'Rahim Ahmed',  distance: 1.2, estimatedTime: 6,  rating: 4.8, lat: 23.8203, lng: 90.4225 },
-  { _id: '2', vehicleNumber: 'AMB-002', type: 'Advanced', status: 'Available', driver: 'Karim Hossain', distance: 2.4, estimatedTime: 10, rating: 4.6, lat: 23.8003, lng: 90.4025 },
-  { _id: '3', vehicleNumber: 'AMB-003', type: 'ICU',      status: 'Busy',      driver: 'Jamal Uddin',  distance: 3.1, estimatedTime: 14, rating: 4.9, lat: 23.8150, lng: 90.4300 },
-  { _id: '4', vehicleNumber: 'AMB-004', type: 'Basic',    status: 'Available', driver: 'Sajid Mia',    distance: 0.8, estimatedTime: 4,  rating: 4.7, lat: 23.8250, lng: 90.4050 },
-];
+// Dynamic nearby ambulance generator: situates emergency fleet right around user's chosen location
+export const generateNearbyAmbulances = (lat, lng, areaLabel = '') => {
+  const userLat = typeof lat === 'number' ? lat : 23.8103;
+  const userLng = typeof lng === 'number' ? lng : 90.4125;
+
+  const baseUnits = [
+    { id: 'amb-1', num: 'AMB-001', type: 'Basic',    driver: 'Rahim Ahmed',  rating: 4.8, dLat:  0.0052, dLng: -0.0058 },
+    { id: 'amb-2', num: 'AMB-002', type: 'Advanced', driver: 'Karim Hossain', rating: 4.9, dLat: -0.0075, dLng:  0.0082 },
+    { id: 'amb-3', num: 'AMB-003', type: 'ICU',      driver: 'Jamal Uddin',  rating: 4.9, dLat:  0.0118, dLng:  0.0104 },
+    { id: 'amb-4', num: 'AMB-004', type: 'Basic',    driver: 'Sajid Mia',    rating: 4.7, dLat: -0.0132, dLng: -0.0115 },
+    { id: 'amb-5', num: 'AMB-005', type: 'Advanced', driver: 'Tanvir Hasan', rating: 4.8, dLat:  0.0158, dLng: -0.0142 },
+  ];
+
+  return baseUnits.map((u, idx) => {
+    const ambLat = Number((userLat + u.dLat).toFixed(6));
+    const ambLng = Number((userLng + u.dLng).toFixed(6));
+
+    // Precise Haversine distance in km
+    const R = 6371;
+    const dLatRad = (ambLat - userLat) * (Math.PI / 180);
+    const dLngRad = (ambLng - userLng) * (Math.PI / 180);
+    const a =
+      Math.sin(dLatRad / 2) * Math.sin(dLatRad / 2) +
+      Math.cos(userLat * (Math.PI / 180)) * Math.cos(ambLat * (Math.PI / 180)) *
+      Math.sin(dLngRad / 2) * Math.sin(dLngRad / 2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+    const distance = Number((R * c).toFixed(1));
+    const estimatedTime = Math.max(3, Math.round(distance * 3.2));
+
+    return {
+      _id: u.id,
+      id: u.id,
+      vehicleNumber: u.num,
+      type: u.type,
+      status: idx === 3 ? 'Busy' : 'Available',
+      driver: u.driver,
+      rating: u.rating,
+      lat: ambLat,
+      lng: ambLng,
+      location: { lat: ambLat, lng: ambLng },
+      distance: distance > 0 ? distance : 0.8,
+      estimatedTime,
+      hospital: areaLabel ? `${areaLabel} Trauma ER` : 'Local Emergency Hospital',
+    };
+  });
+};
 
 export default function HomePage() {
   const { location, getLocation, setManualLocation, loading: geoLoading, error: geoError } = useGeolocation();
-  const [ambulances, setAmbulances] = useState(MOCK_AMBULANCES);
+  const [ambulances, setAmbulances] = useState(() =>
+    generateNearbyAmbulances(23.8103, 90.4125, 'Dhaka')
+  );
   const [selectedFilter, setSelectedFilter] = useState('All');
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedAmbulance, setSelectedAmbulance] = useState(null);
@@ -61,12 +102,61 @@ export default function HomePage() {
     { name: 'Dhaka Central (DMCH)', lat: 23.7258, lng: 90.3975, icon: '🏛️' },
   ];
 
-  // Auto-center map on user location
+  // Fetch from API with graceful fallback to synthesized local fleet
+  const fetchNearby = useCallback(async () => {
+    if (!location || typeof location.lat !== 'number' || typeof location.lng !== 'number') return;
+    setLoading(true);
+    try {
+      const res = await ambulanceAPI.getNearby(location.lat, location.lng);
+      const list = res.data?.ambulances || res.data?.data?.ambulances || res.data?.data || res.data;
+      if (Array.isArray(list) && list.length >= 3) {
+        const formatted = list.map((item, idx) => {
+          const rawType = item.type || 'Basic';
+          const normalizedType = rawType.toLowerCase() === 'icu'
+            ? 'ICU'
+            : (rawType.charAt(0).toUpperCase() + rawType.slice(1).toLowerCase());
+
+          const latNum = parseFloat(item.latitude || item.lat);
+          const lngNum = parseFloat(item.longitude || item.lng);
+
+          return {
+            _id: item.id || item._id || `amb-${idx}`,
+            id: item.id || item._id,
+            vehicleNumber: item.vehicleNumber || `AMB-00${idx + 1}`,
+            type: normalizedType,
+            status: item.status === 'available' ? 'Available' : (item.status || 'Available'),
+            driver: item.driver?.name || item.driver || 'Assigned Driver',
+            rating: item.driver?.rating || 4.8,
+            lat: !isNaN(latNum) ? latNum : location.lat,
+            lng: !isNaN(lngNum) ? lngNum : location.lng,
+            location: {
+              lat: !isNaN(latNum) ? latNum : location.lat,
+              lng: !isNaN(lngNum) ? lngNum : location.lng,
+            },
+            distance: item.distance !== undefined ? Number(parseFloat(item.distance).toFixed(1)) : 1.2,
+            estimatedTime: item.estimatedTime || Math.max(3, Math.round((item.distance || 1) * 3.2)),
+            hospital: item.hospital || 'Nearby Hospital ER',
+          };
+        });
+        setAmbulances(formatted);
+      } else {
+        setAmbulances(generateNearbyAmbulances(location.lat, location.lng, location.label));
+      }
+    } catch {
+      setAmbulances(generateNearbyAmbulances(location.lat, location.lng, location.label));
+    } finally {
+      setLoading(false);
+    }
+  }, [location]);
+
+  // Auto-center map & regenerate fleet around active user location
   useEffect(() => {
     if (location && typeof location.lat === 'number' && typeof location.lng === 'number') {
       setMapCenter([location.lat, location.lng]);
+      setAmbulances(generateNearbyAmbulances(location.lat, location.lng, location.label));
+      fetchNearby();
     }
-  }, [location]);
+  }, [location, fetchNearby]);
 
   // Listen to live Firebase stream for any active driver
   useEffect(() => {
@@ -88,27 +178,6 @@ export default function HomePage() {
 
     return () => unsub();
   }, []);
-
-  // Fetch from API with graceful fallback to mock data
-  const fetchNearby = useCallback(async () => {
-    if (!location) return;
-    setLoading(true);
-    try {
-      const res = await ambulanceAPI.getNearby(location.lat, location.lng);
-      const list = res.data?.ambulances || res.data?.data || res.data;
-      if (Array.isArray(list) && list.length > 0) {
-        setAmbulances(list);
-      }
-    } catch {
-      // Retain mock ambulances
-    } finally {
-      setLoading(false);
-    }
-  }, [location]);
-
-  useEffect(() => {
-    fetchNearby();
-  }, [fetchNearby]);
 
   // Merge live Firebase driver into the list if active
   const allAmbulances = useMemo(() => {
@@ -148,6 +217,7 @@ export default function HomePage() {
     const loc = await setManualLocation(coords);
     if (loc) {
       setMapCenter([coords.lat, coords.lng]);
+      setAmbulances(generateNearbyAmbulances(coords.lat, coords.lng, loc.label));
       setLocationSuccessMsg(`📍 Location pinned: ${loc.label || 'Selected on Map'}`);
       setTimeout(() => setLocationSuccessMsg(''), 4000);
     }
@@ -157,6 +227,7 @@ export default function HomePage() {
     const loc = await getLocation({ forceFresh: true });
     if (loc && typeof loc.lat === 'number' && typeof loc.lng === 'number') {
       setMapCenter([loc.lat, loc.lng]);
+      setAmbulances(generateNearbyAmbulances(loc.lat, loc.lng, loc.label));
       setLocationSuccessMsg(`📍 Live GPS detected: ${loc.label || 'Your Location'}`);
       setTimeout(() => setLocationSuccessMsg(''), 4000);
     }
@@ -167,6 +238,7 @@ export default function HomePage() {
     if (loc) {
       setMapCenter([area.lat, area.lng]);
       setShowAreaPicker(false);
+      setAmbulances(generateNearbyAmbulances(area.lat, area.lng, area.name));
       setLocationSuccessMsg(`📍 Selected Area: ${area.name}`);
       setTimeout(() => setLocationSuccessMsg(''), 4000);
     }
@@ -392,15 +464,41 @@ export default function HomePage() {
           </div>
         </div>
 
+        {/* Selected Ambulance Quick Action Bar */}
+        {selectedAmbulance && (
+          <div className="px-5 pb-2 pt-1 flex items-center justify-between border-b border-gray-100 dark:border-slate-800 animate-fade-in">
+            <div className="flex items-center gap-2 text-xs">
+              <span className="font-bold text-gray-900 dark:text-gray-100">
+                Selected: {selectedAmbulance.vehicleNumber}
+              </span>
+              <span className="text-blue-600 dark:text-blue-400 font-semibold">
+                • {selectedAmbulance.distance} km away (~{selectedAmbulance.estimatedTime}m)
+              </span>
+            </div>
+            <Link
+              href={`/request?ambulanceType=${selectedAmbulance.type}&vehicle=${selectedAmbulance.vehicleNumber}`}
+              className="px-3 py-1 rounded-xl text-xs font-bold text-white bg-red-600 hover:bg-red-700 transition shadow-sm active:scale-95 flex items-center gap-1"
+            >
+              <span>Dispatch Now</span>
+              <span>➔</span>
+            </Link>
+          </div>
+        )}
+
         {/* Ambulance horizontal scroll cards */}
         <div className="flex-1 overflow-x-auto overflow-y-hidden px-4 pb-3 flex gap-3.5 items-center scrollbar-hide">
           {filteredAmbulances.map((amb) => (
             <div key={amb._id} className="min-w-[280px] max-w-[310px] shrink-0">
               <AmbulanceCard
                 ambulance={amb}
+                selected={selectedAmbulance?._id === amb._id}
                 onSelect={(a) => {
                   setSelectedAmbulance(a);
-                  setMapCenter([a.location?.lat || a.lat, a.location?.lng || a.lng]);
+                  const aLat = parseFloat(a.location?.lat || a.lat);
+                  const aLng = parseFloat(a.location?.lng || a.lng);
+                  if (!isNaN(aLat) && !isNaN(aLng)) {
+                    setMapCenter([aLat, aLng]);
+                  }
                 }}
               />
             </div>

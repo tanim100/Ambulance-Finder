@@ -44,72 +44,93 @@ export const MAP_TILES = {
   },
 };
 
-// ── Static Cached Icons with Emergency Visuals ──
-let cachedAmbulanceIcon = null;
-export const createAmbulanceIcon = (status = 'En Route') => {
+// ── Dynamic Cached Icons with Emergency Visuals & Vehicle Plates ──
+const ambulanceIconCache = new Map();
+
+export const createAmbulanceIcon = (plate = 'AMB-01', type = 'Basic') => {
   if (typeof window === 'undefined') return null;
-  if (!cachedAmbulanceIcon) {
-    cachedAmbulanceIcon = L.divIcon({
-      className: 'custom-ambulance-icon',
-      html: `
-        <div style="position: relative; width: 48px; height: 48px; display: flex; align-items: center; justify-content: center;">
-          <!-- Dual Alternating Emergency Strobe LED Beacons -->
-          <div style="
-            position: absolute;
-            top: -6px;
-            left: 50%;
-            transform: translateX(-50%);
-            display: flex;
-            gap: 3px;
-            z-index: 10;
-          ">
-            <span class="strobe-red" style="width: 7px; height: 7px; border-radius: 50%; background: #EF4444; border: 1.5px solid white; display: inline-block;"></span>
-            <span class="strobe-blue" style="width: 7px; height: 7px; border-radius: 50%; background: #3B82F6; border: 1.5px solid white; display: inline-block;"></span>
-          </div>
 
-          <!-- 3D Ambulance Badge -->
-          <div style="
-            position: relative;
-            background: linear-gradient(135deg, #EF4444 0%, #DC2626 100%);
-            border: 3px solid #FFFFFF;
-            border-radius: 50%;
-            width: 44px;
-            height: 44px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 22px;
-            box-shadow: 0 4px 18px rgba(220,38,38,0.6);
-            cursor: pointer;
-          ">
-            🚑
-          </div>
+  const tagText = (plate && typeof plate === 'string' && plate.length > 0)
+    ? (plate.length > 10 ? plate.slice(0, 10) : plate)
+    : 'AMB-01';
+  const typeStr = (type && typeof type === 'string') ? type.toLowerCase() : 'basic';
+  const cacheKey = `${tagText}_${typeStr}`;
 
-          <!-- License Plate / Vehicle ID Tag -->
-          <div style="
-            position: absolute;
-            bottom: -15px;
-            left: 50%;
-            transform: translateX(-50%);
-            background: #0F172A;
-            color: #F8FAFC;
-            font-size: 8.5px;
-            font-weight: 800;
-            padding: 1.5px 5px;
-            border-radius: 4px;
-            letter-spacing: 0.3px;
-            white-space: nowrap;
-            box-shadow: 0 2px 8px rgba(0,0,0,0.35);
-            border: 1px solid rgba(255,255,255,0.15);
-          ">DHA-4421</div>
-        </div>
-      `,
-      iconSize: [48, 54],
-      iconAnchor: [24, 27],
-      popupAnchor: [0, -27],
-    });
+  if (ambulanceIconCache.has(cacheKey)) {
+    return ambulanceIconCache.get(cacheKey);
   }
-  return cachedAmbulanceIcon;
+
+  const isICU = typeStr.includes('icu');
+  const isAdv = typeStr.includes('adv');
+  const gradient = isICU
+    ? 'linear-gradient(135deg, #DC2626 0%, #991B1B 100%)'
+    : isAdv
+    ? 'linear-gradient(135deg, #EA580C 0%, #C2410C 100%)'
+    : 'linear-gradient(135deg, #EF4444 0%, #DC2626 100%)';
+  const badgeBg = isICU ? '#7F1D1D' : isAdv ? '#9A3412' : '#0F172A';
+
+  const icon = L.divIcon({
+    className: 'custom-ambulance-icon',
+    html: `
+      <div style="position: relative; width: 48px; height: 48px; display: flex; align-items: center; justify-content: center;">
+        <!-- Dual Alternating Emergency Strobe LED Beacons -->
+        <div style="
+          position: absolute;
+          top: -6px;
+          left: 50%;
+          transform: translateX(-50%);
+          display: flex;
+          gap: 3px;
+          z-index: 10;
+        ">
+          <span class="strobe-red" style="width: 7px; height: 7px; border-radius: 50%; background: #EF4444; border: 1.5px solid white; display: inline-block;"></span>
+          <span class="strobe-blue" style="width: 7px; height: 7px; border-radius: 50%; background: #3B82F6; border: 1.5px solid white; display: inline-block;"></span>
+        </div>
+
+        <!-- 3D Ambulance Badge -->
+        <div style="
+          position: relative;
+          background: ${gradient};
+          border: 3px solid #FFFFFF;
+          border-radius: 50%;
+          width: 44px;
+          height: 44px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          font-size: 22px;
+          box-shadow: 0 4px 18px rgba(220,38,38,0.6);
+          cursor: pointer;
+        ">
+          ${isICU ? '🏥' : '🚑'}
+        </div>
+
+        <!-- License Plate / Vehicle ID Tag -->
+        <div style="
+          position: absolute;
+          bottom: -15px;
+          left: 50%;
+          transform: translateX(-50%);
+          background: ${badgeBg};
+          color: #F8FAFC;
+          font-size: 8.5px;
+          font-weight: 800;
+          padding: 1.5px 5px;
+          border-radius: 4px;
+          letter-spacing: 0.3px;
+          white-space: nowrap;
+          box-shadow: 0 2px 8px rgba(0,0,0,0.35);
+          border: 1px solid rgba(255,255,255,0.15);
+        ">${tagText}</div>
+      </div>
+    `,
+    iconSize: [48, 54],
+    iconAnchor: [24, 27],
+    popupAnchor: [0, -27],
+  });
+
+  ambulanceIconCache.set(cacheKey, icon);
+  return icon;
 };
 
 let cachedUserIcon = null;
@@ -442,7 +463,6 @@ export default function MapView({
     ? userLocation
     : null;
 
-  const ambIcon = createAmbulanceIcon();
   const userIcon = createUserIcon();
   const hospIcon = createHospitalIcon();
 
@@ -627,34 +647,41 @@ export default function MapView({
           </Marker>
         )}
 
-        {/* Nearby Active Ambulance Fleet */}
-        {ambulances.map((amb, i) => (
-          <Marker
-            key={amb._id || i}
-            position={[
-              amb.location?.lat || amb.lat || 23.81,
-              amb.location?.lng || amb.lng || 90.41,
-            ]}
-            icon={ambIcon}
-            eventHandlers={{
-              click: () => onAmbulanceClick?.(amb),
-            }}
-          >
-            <Popup>
-              <div className="text-sm">
-                <p className="font-bold text-gray-900">{amb.vehicleNumber || 'Ambulance'}</p>
-                <p className="text-red-600 font-medium text-xs">{amb.type || 'Standard'} Ambulance</p>
-                <p className="text-gray-500 text-xs mt-1">Driver: {amb.driver || 'Assigned Driver'}</p>
-              </div>
-            </Popup>
-          </Marker>
-        ))}
+        {/* Nearby Active Ambulance Fleet with Dynamic Vehicle Badges */}
+        {ambulances.map((amb, i) => {
+          const vNum = amb.vehicleNumber || `AMB-0${i + 1}`;
+          const icon = createAmbulanceIcon(vNum, amb.type);
+          return (
+            <Marker
+              key={amb._id || amb.id || i}
+              position={[
+                amb.location?.lat || amb.lat || 23.81,
+                amb.location?.lng || amb.lng || 90.41,
+              ]}
+              icon={icon}
+              eventHandlers={{
+                click: () => onAmbulanceClick?.(amb),
+              }}
+            >
+              <Popup>
+                <div className="text-sm">
+                  <p className="font-bold text-gray-900">{vNum}</p>
+                  <p className="text-red-600 font-medium text-xs">{amb.type || 'Standard'} Ambulance</p>
+                  <p className="text-gray-500 text-xs mt-1">Driver: {amb.driver || 'Assigned Driver'}</p>
+                  {amb.distance !== undefined && (
+                    <p className="text-blue-600 font-semibold text-xs mt-0.5">📍 {amb.distance} km away</p>
+                  )}
+                </div>
+              </Popup>
+            </Marker>
+          );
+        })}
 
         {/* Assigned Ambulance Live Marker (Smooth 60fps Interpolation) */}
         {driverLocation && typeof driverLocation.lat === 'number' && typeof driverLocation.lng === 'number' && (
           <SmoothMarker
             position={[driverLocation.lat, driverLocation.lng]}
-            icon={ambIcon}
+            icon={createAmbulanceIcon(driverLocation.vehicleNumber || 'DHA-4421', driverLocation.type || 'Advanced')}
             duration={800}
           >
             <Popup>
