@@ -12,6 +12,7 @@ import AmbulanceCard from '@/components/ambulance/AmbulanceCard';
 import { useGeolocation } from '@/hooks/useGeolocation';
 import { ambulanceAPI } from '@/lib/api';
 import { subscribeToAmbulanceLocation } from '@/lib/firebaseTracking';
+import { getNearbyHospitals } from '@/lib/hospitalData';
 
 const MapView = dynamic(() => import('@/components/map/MapView'), {
   ssr: false,
@@ -82,9 +83,14 @@ export default function HomePage() {
   const [ambulances, setAmbulances] = useState(() =>
     generateNearbyAmbulances(23.8103, 90.4125, 'Dhaka')
   );
+  const [hospitals, setHospitals] = useState(() =>
+    getNearbyHospitals(23.8103, 90.4125, 'Dhaka')
+  );
+  const [activeSheetTab, setActiveSheetTab] = useState('ambulances'); // 'ambulances' | 'hospitals'
   const [selectedFilter, setSelectedFilter] = useState('All');
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedAmbulance, setSelectedAmbulance] = useState(null);
+  const [selectedHospital, setSelectedHospital] = useState(null);
   const [sheetExpanded, setSheetExpanded] = useState(false);
   const [loading, setLoading] = useState(false);
   const [mapCenter, setMapCenter] = useState([23.8103, 90.4125]);
@@ -158,6 +164,7 @@ export default function HomePage() {
     if (location && typeof location.lat === 'number' && typeof location.lng === 'number') {
       setMapCenter([location.lat, location.lng]);
       setAmbulances(generateNearbyAmbulances(location.lat, location.lng, location.label));
+      setHospitals(getNearbyHospitals(location.lat, location.lng, location.label));
       fetchNearby();
     }
   }, [location, fetchNearby]);
@@ -222,6 +229,7 @@ export default function HomePage() {
     if (loc) {
       setMapCenter([coords.lat, coords.lng]);
       setAmbulances(generateNearbyAmbulances(coords.lat, coords.lng, loc.label));
+      setHospitals(getNearbyHospitals(coords.lat, coords.lng, loc.label));
       setLocationSuccessMsg(`📍 Location pinned: ${loc.label || 'Selected on Map'}`);
       setTimeout(() => setLocationSuccessMsg(''), 4000);
     }
@@ -232,6 +240,7 @@ export default function HomePage() {
     if (loc && typeof loc.lat === 'number' && typeof loc.lng === 'number') {
       setMapCenter([loc.lat, loc.lng]);
       setAmbulances(generateNearbyAmbulances(loc.lat, loc.lng, loc.label));
+      setHospitals(getNearbyHospitals(loc.lat, loc.lng, loc.label));
       setLocationSuccessMsg(`📍 Live GPS detected: ${loc.label || 'Your Location'}`);
       setTimeout(() => setLocationSuccessMsg(''), 4000);
     }
@@ -243,6 +252,7 @@ export default function HomePage() {
       setMapCenter([area.lat, area.lng]);
       setShowAreaPicker(false);
       setAmbulances(generateNearbyAmbulances(area.lat, area.lng, area.name));
+      setHospitals(getNearbyHospitals(area.lat, area.lng, area.name));
       setLocationSuccessMsg(`📍 Selected Area: ${area.name}`);
       setTimeout(() => setLocationSuccessMsg(''), 4000);
     }
@@ -261,8 +271,14 @@ export default function HomePage() {
             center={mapCenter}
             userLocation={location}
             ambulances={filteredAmbulances}
+            hospitals={hospitals}
             driverLocation={liveDriverPos ? { lat: liveDriverPos.lat, lng: liveDriverPos.lng, speed: liveDriverPos.speed } : null}
             onAmbulanceClick={setSelectedAmbulance}
+            onHospitalClick={(h) => {
+              setSelectedHospital(h);
+              setActiveSheetTab('hospitals');
+              if (h.lat && h.lng) setMapCenter([h.lat, h.lng]);
+            }}
             onLocationSelect={handleMapClick}
             height="100%"
           />
@@ -437,10 +453,10 @@ export default function HomePage() {
 
       </div>
 
-      {/* ── Bottom Sheet for Nearby Ambulance Cards ── */}
+      {/* ── Bottom Sheet for Nearby Ambulance & Hospital Cards ── */}
       <div
         className={`rounded-t-3xl shadow-2xl z-20 transition-all duration-300 ${
-          sheetExpanded ? 'h-2/3' : 'h-52'
+          sheetExpanded ? 'h-2/3' : 'h-60'
         } flex flex-col`}
         style={{
           background: 'var(--surface)',
@@ -449,19 +465,52 @@ export default function HomePage() {
       >
         {/* Handle */}
         <div
-          className="flex flex-col items-center pt-3 pb-2 cursor-pointer select-none"
+          className="flex flex-col items-center pt-2.5 pb-1.5 cursor-pointer select-none"
           onClick={() => setSheetExpanded((v) => !v)}
         >
-          <div className="w-10 h-1 rounded-full mb-2" style={{ background: 'var(--border-strong)' }} />
+          <div className="w-10 h-1 rounded-full mb-1.5" style={{ background: 'var(--border-strong)' }} />
           <div className="flex items-center justify-between w-full px-5">
-            <div>
-              <p className="font-bold text-sm sm:text-base" style={{ color: 'var(--on-surface)' }}>
-                Nearby Ambulances
-              </p>
-              <p className="text-xs" style={{ color: 'var(--on-surface-muted)' }}>
-                {filteredAmbulances.length} units matching <strong style={{ color: 'var(--primary)' }}>{selectedFilter}</strong>
-              </p>
+            {/* View Switcher Tabs: Ambulances vs Hospitals */}
+            <div className="flex items-center gap-1.5 bg-slate-100 dark:bg-slate-800/80 p-1 rounded-xl border border-slate-200 dark:border-slate-700/80">
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setActiveSheetTab('ambulances');
+                }}
+                className={`flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-bold transition-all ${
+                  activeSheetTab === 'ambulances'
+                    ? 'bg-white dark:bg-slate-900 text-rose-600 dark:text-rose-400 shadow-xs'
+                    : 'text-slate-600 dark:text-slate-400 hover:text-slate-900'
+                }`}
+              >
+                <span>🚑</span>
+                <span>Ambulances</span>
+                <span className="px-1.5 py-0.2 rounded-full text-[10px] bg-rose-50 dark:bg-rose-950/60 text-rose-600 dark:text-rose-300 font-mono">
+                  {filteredAmbulances.length}
+                </span>
+              </button>
+
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setActiveSheetTab('hospitals');
+                }}
+                className={`flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-bold transition-all ${
+                  activeSheetTab === 'hospitals'
+                    ? 'bg-white dark:bg-slate-900 text-emerald-600 dark:text-emerald-400 shadow-xs'
+                    : 'text-slate-600 dark:text-slate-400 hover:text-slate-900'
+                }`}
+              >
+                <span>🏥</span>
+                <span>Nearby Hospitals</span>
+                <span className="px-1.5 py-0.2 rounded-full text-[10px] bg-emerald-50 dark:bg-emerald-950/60 text-emerald-600 dark:text-emerald-300 font-mono">
+                  {hospitals.length}
+                </span>
+              </button>
             </div>
+
             <button className="p-1 rounded-lg" style={{ background: 'var(--surface-2)' }}>
               {sheetExpanded ? <ChevronDown size={18} /> : <ChevronUp size={18} />}
             </button>
@@ -469,7 +518,7 @@ export default function HomePage() {
         </div>
 
         {/* Selected Ambulance Quick Action Bar */}
-        {selectedAmbulance && (
+        {activeSheetTab === 'ambulances' && selectedAmbulance && (
           <div className="px-5 pb-2 pt-1 flex items-center justify-between border-b border-gray-100 dark:border-slate-800 animate-fade-in">
             <div className="flex items-center gap-2 text-xs">
               <span className="font-bold text-gray-900 dark:text-gray-100">
@@ -489,25 +538,105 @@ export default function HomePage() {
           </div>
         )}
 
-        {/* Ambulance horizontal scroll cards */}
-        <div className="flex-1 overflow-x-auto overflow-y-hidden px-4 pb-3 flex gap-3.5 items-center scrollbar-hide">
-          {filteredAmbulances.map((amb) => (
-            <div key={amb._id} className="min-w-[280px] max-w-[310px] shrink-0">
-              <AmbulanceCard
-                ambulance={amb}
-                selected={selectedAmbulance?._id === amb._id}
-                onSelect={(a) => {
-                  setSelectedAmbulance(a);
-                  const aLat = parseFloat(a.location?.lat || a.lat);
-                  const aLng = parseFloat(a.location?.lng || a.lng);
-                  if (!isNaN(aLat) && !isNaN(aLng)) {
-                    setMapCenter([aLat, aLng]);
-                  }
-                }}
-              />
+        {/* Selected Hospital Quick Action Bar */}
+        {activeSheetTab === 'hospitals' && selectedHospital && (
+          <div className="px-5 pb-2 pt-1 flex items-center justify-between border-b border-gray-100 dark:border-slate-800 animate-fade-in">
+            <div className="flex items-center gap-2 text-xs truncate mr-2">
+              <span className="font-bold text-emerald-800 dark:text-emerald-300 truncate">
+                🏥 {selectedHospital.shortName || selectedHospital.name}
+              </span>
+              <span className="text-emerald-600 font-semibold shrink-0">
+                • {selectedHospital.distance} km away (~{selectedHospital.estimatedTime}m)
+              </span>
             </div>
-          ))}
-        </div>
+            <Link
+              href={`/request?destination=${encodeURIComponent(selectedHospital.name)}&lat=${location?.lat || 23.8103}&lng=${location?.lng || 90.4125}&label=${encodeURIComponent(location?.label || '')}`}
+              className="px-3 py-1 rounded-xl text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-700 transition shadow-sm active:scale-95 flex items-center gap-1 shrink-0"
+            >
+              <span>Book Ambulance</span>
+              <span>➔</span>
+            </Link>
+          </div>
+        )}
+
+        {/* Content Area: Horizontal Scroll Cards */}
+        {activeSheetTab === 'ambulances' ? (
+          <div className="flex-1 overflow-x-auto overflow-y-hidden px-4 pb-3 flex gap-3.5 items-center scrollbar-hide">
+            {filteredAmbulances.map((amb) => (
+              <div key={amb._id} className="min-w-[280px] max-w-[310px] shrink-0">
+                <AmbulanceCard
+                  ambulance={amb}
+                  selected={selectedAmbulance?._id === amb._id}
+                  onSelect={(a) => {
+                    setSelectedAmbulance(a);
+                    const aLat = parseFloat(a.location?.lat || a.lat);
+                    const aLng = parseFloat(a.location?.lng || a.lng);
+                    if (!isNaN(aLat) && !isNaN(aLng)) {
+                      setMapCenter([aLat, aLng]);
+                    }
+                  }}
+                />
+              </div>
+            ))}
+          </div>
+        ) : (
+          <div className="flex-1 overflow-x-auto overflow-y-hidden px-4 pb-3 flex gap-3.5 items-center scrollbar-hide">
+            {hospitals.map((h) => {
+              const isSelected = selectedHospital?.id === h.id;
+              return (
+                <div
+                  key={h.id}
+                  onClick={() => {
+                    setSelectedHospital(h);
+                    if (h.lat && h.lng) setMapCenter([h.lat, h.lng]);
+                  }}
+                  className={`min-w-[290px] max-w-[320px] shrink-0 p-3.5 rounded-2xl border transition-all cursor-pointer shadow-sm select-none ${
+                    isSelected
+                      ? 'border-emerald-500 bg-emerald-50/50 dark:bg-emerald-950/30 ring-2 ring-emerald-500/20'
+                      : 'border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 hover:border-emerald-300'
+                  }`}
+                >
+                  <div className="flex items-start justify-between gap-2 mb-1.5">
+                    <div className="flex items-center gap-2">
+                      <span className="w-8 h-8 rounded-xl bg-emerald-100 dark:bg-emerald-900/50 text-emerald-700 dark:text-emerald-300 flex items-center justify-center text-sm font-bold shrink-0">
+                        🏥
+                      </span>
+                      <div>
+                        <h3 className="font-bold text-xs text-slate-900 dark:text-slate-100 line-clamp-1 leading-tight">
+                          {h.shortName || h.name}
+                        </h3>
+                        <p className="text-[10.5px] text-slate-500 dark:text-slate-400 line-clamp-1 mt-0.5">
+                          {h.area}
+                        </p>
+                      </div>
+                    </div>
+                    <span className="text-[10px] font-bold text-emerald-700 dark:text-emerald-300 bg-emerald-100/70 dark:bg-emerald-900/60 px-2 py-0.5 rounded-full shrink-0">
+                      {h.distance} km
+                    </span>
+                  </div>
+
+                  <p className="text-[10.5px] text-slate-600 dark:text-slate-300 line-clamp-1 bg-slate-50 dark:bg-slate-800/60 px-2 py-1 rounded-lg mb-2.5 font-medium">
+                    🚨 {h.emergency}
+                  </p>
+
+                  <div className="flex items-center justify-between gap-2 pt-1 border-t border-slate-100 dark:border-slate-800">
+                    <span className="text-[11px] font-semibold text-emerald-600 dark:text-emerald-400 flex items-center gap-1">
+                      ⚡ ~{h.estimatedTime} min drive
+                    </span>
+                    <Link
+                      href={`/request?destination=${encodeURIComponent(h.name)}&lat=${location?.lat || 23.8103}&lng=${location?.lng || 90.4125}&label=${encodeURIComponent(location?.label || '')}`}
+                      onClick={(e) => e.stopPropagation()}
+                      className="px-2.5 py-1 rounded-xl text-[11px] font-bold text-white bg-emerald-600 hover:bg-emerald-700 transition shadow-xs flex items-center gap-1"
+                    >
+                      <span>Book to ER</span>
+                      <span>➔</span>
+                    </Link>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
       </div>
 
       <BottomNav />

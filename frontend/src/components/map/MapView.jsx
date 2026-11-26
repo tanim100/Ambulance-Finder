@@ -192,65 +192,78 @@ export const createUserIcon = () => {
   return cachedUserIcon;
 };
 
-let cachedHospitalIcon = null;
-export const createHospitalIcon = () => {
+const hospitalIconCache = new Map();
+
+export const createHospitalIcon = (name = '', distance = null) => {
   if (typeof window === 'undefined') return null;
-  if (!cachedHospitalIcon) {
-    cachedHospitalIcon = L.divIcon({
-      className: 'custom-hospital-icon',
-      html: `
-        <div style="position: relative; width: 46px; height: 46px; display: flex; align-items: center; justify-content: center;">
-          <!-- Green Emergency Glow Wave -->
-          <div class="animate-radar-sweep" style="
-            position: absolute;
-            width: 44px;
-            height: 44px;
-            background: rgba(16, 185, 129, 0.22);
-            border-radius: 50%;
-          "></div>
 
-          <!-- 3D Medical Cross Core -->
-          <div style="
-            position: relative;
-            background: linear-gradient(135deg, #059669 0%, #047857 100%);
-            border: 2.5px solid #FFFFFF;
-            border-radius: 50%;
-            width: 32px;
-            height: 32px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 16px;
-            box-shadow: 0 4px 14px rgba(5,150,105,0.55);
-            cursor: pointer;
-          ">
-            🏥
-          </div>
+  const shortTag = name
+    ? (name.length > 16 ? name.slice(0, 15) + '…' : name)
+    : 'HOSPITAL ER';
+  const tagWithDist = distance != null ? `${shortTag} • ${distance}km` : shortTag;
+  const cacheKey = tagWithDist;
 
-          <!-- Hospital Tag -->
-          <div style="
-            position: absolute;
-            bottom: -13px;
-            left: 50%;
-            transform: translateX(-50%);
-            background: #047857;
-            color: white;
-            font-size: 8.5px;
-            font-weight: 800;
-            padding: 1.5px 5px;
-            border-radius: 4px;
-            letter-spacing: 0.4px;
-            white-space: nowrap;
-            box-shadow: 0 2px 6px rgba(0,0,0,0.25);
-          ">HOSPITAL ER</div>
-        </div>
-      `,
-      iconSize: [46, 50],
-      iconAnchor: [23, 25],
-      popupAnchor: [0, -25],
-    });
+  if (hospitalIconCache.has(cacheKey)) {
+    return hospitalIconCache.get(cacheKey);
   }
-  return cachedHospitalIcon;
+
+  const icon = L.divIcon({
+    className: 'custom-hospital-icon',
+    html: `
+      <div style="position: relative; width: 46px; height: 46px; display: flex; align-items: center; justify-content: center;">
+        <!-- Green Emergency Glow Wave -->
+        <div class="animate-radar-sweep" style="
+          position: absolute;
+          width: 44px;
+          height: 44px;
+          background: rgba(16, 185, 129, 0.22);
+          border-radius: 50%;
+        "></div>
+
+        <!-- 3D Medical Cross Core -->
+        <div style="
+          position: relative;
+          background: linear-gradient(135deg, #059669 0%, #047857 100%);
+          border: 2.5px solid #FFFFFF;
+          border-radius: 50%;
+          width: 32px;
+          height: 32px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          font-size: 16px;
+          box-shadow: 0 4px 14px rgba(5,150,105,0.55);
+          cursor: pointer;
+        ">
+          🏥
+        </div>
+
+        <!-- Hospital Tag -->
+        <div style="
+          position: absolute;
+          bottom: -14px;
+          left: 50%;
+          transform: translateX(-50%);
+          background: #047857;
+          color: white;
+          font-size: 8.5px;
+          font-weight: 800;
+          padding: 1.5px 5px;
+          border-radius: 4px;
+          letter-spacing: 0.3px;
+          white-space: nowrap;
+          box-shadow: 0 2px 6px rgba(0,0,0,0.25);
+          border: 1px solid rgba(255,255,255,0.2);
+        ">${tagWithDist}</div>
+      </div>
+    `,
+    iconSize: [46, 52],
+    iconAnchor: [23, 26],
+    popupAnchor: [0, -26],
+  });
+
+  hospitalIconCache.set(cacheKey, icon);
+  return icon;
 };
 
 // ── Smooth 60FPS Animated Marker with requestAnimationFrame Interpolation ──
@@ -448,11 +461,13 @@ export default function MapView({
   zoom = 14,
   userLocation = null,
   ambulances = [],
+  hospitals = [],
   driverLocation = null,
   hospitalLocation = null,
   route = null,
   phaseKey = '',
   onAmbulanceClick = null,
+  onHospitalClick = null,
   onLocationSelect = null,
   className = '',
   height = '100%',
@@ -617,7 +632,7 @@ export default function MapView({
           </SmoothMarker>
         )}
 
-        {/* Destination Hospital Marker */}
+        {/* Destination Hospital Marker (Single Selected Target) */}
         {hospitalLocation && typeof hospitalLocation.lat === 'number' && typeof hospitalLocation.lng === 'number' && (
           <Marker
             position={[hospitalLocation.lat, hospitalLocation.lng]}
@@ -646,6 +661,59 @@ export default function MapView({
             </Popup>
           </Marker>
         )}
+
+        {/* Nearby Emergency Hospitals Fleet with Distance Badges */}
+        {hospitals.map((h, i) => {
+          if (!h.lat || !h.lng) return null;
+          const hospIconWithTag = createHospitalIcon(h.shortName || h.name, h.distance);
+          return (
+            <Marker
+              key={h.id || h._id || `hosp-${i}`}
+              position={[h.lat, h.lng]}
+              icon={hospIconWithTag}
+              eventHandlers={{
+                click: () => onHospitalClick?.(h),
+              }}
+            >
+              <Popup>
+                <div className="text-center p-1.5 min-w-[210px]">
+                  <p className="font-bold text-sm text-emerald-800 flex items-center justify-center gap-1">
+                    🏥 {h.name || 'Emergency Hospital'}
+                  </p>
+                  <p className="text-xs text-gray-500 mt-0.5">{h.area || 'Emergency Department'}</p>
+                  {h.distance !== undefined && (
+                    <div className="my-1.5 inline-flex items-center gap-1 text-xs font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200">
+                      <span>📍 {h.distance} km from you</span>
+                      <span>•</span>
+                      <span>~{h.estimatedTime || Math.round(h.distance * 3.2)} min drive</span>
+                    </div>
+                  )}
+                  {h.emergency && (
+                    <p className="text-[11px] text-emerald-600 font-medium bg-emerald-50/60 p-1 rounded text-left">
+                      🚨 {h.emergency}
+                    </p>
+                  )}
+                  <div className="mt-2.5 flex flex-col gap-1.5">
+                    {h.hotline && (
+                      <a
+                        href={`tel:${h.hotline}`}
+                        className="flex items-center justify-center gap-1 text-xs font-bold bg-emerald-600 hover:bg-emerald-700 text-white py-1.5 px-3 rounded-lg transition"
+                      >
+                        📞 Hotline: {h.hotline}
+                      </a>
+                    )}
+                    <a
+                      href={`/request?destination=${encodeURIComponent(h.name)}&lat=${effectiveUserLoc?.lat || 23.8103}&lng=${effectiveUserLoc?.lng || 90.4125}&pickup=${encodeURIComponent(effectiveUserLoc?.label || '')}`}
+                      className="flex items-center justify-center gap-1 text-xs font-bold bg-rose-600 hover:bg-rose-700 text-white py-1.5 px-3 rounded-lg transition shadow-xs"
+                    >
+                      🚑 Request Ambulance Here
+                    </a>
+                  </div>
+                </div>
+              </Popup>
+            </Marker>
+          );
+        })}
 
         {/* Nearby Active Ambulance Fleet with Dynamic Vehicle Badges */}
         {ambulances.map((amb, i) => {

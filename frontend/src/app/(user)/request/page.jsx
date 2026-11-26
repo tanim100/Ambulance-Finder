@@ -1,7 +1,7 @@
 'use client';
 // src/app/(user)/request/page.jsx — Modern Ambulance Request with Live Reverse Geocoding, Map Picker & Autocomplete
 
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import dynamic from 'next/dynamic';
 import { MapPin, ArrowLeft, CheckCircle, Navigation, Map, Search, X, Loader2, Sparkles, Building2, Hospital, Phone, ShieldCheck, ChevronDown, Check, Info } from 'lucide-react';
@@ -15,6 +15,9 @@ import AmbulanceTypeSelector from '@/components/ambulance/AmbulanceTypeSelector'
 import { bookingAPI } from '@/lib/api';
 import { useGeolocation } from '@/hooks/useGeolocation';
 import { updatePatientLocation, createAmbulanceRequest } from '@/lib/firebaseTracking';
+import { TOP_HOSPITALS, getNearbyHospitals } from '@/lib/hospitalData';
+export { TOP_HOSPITALS };
+import { generateNearbyAmbulances } from '../home/page';
 
 const MapView = dynamic(() => import('@/components/map/MapView'), {
   ssr: false,
@@ -45,153 +48,6 @@ const PRESET_LOCATIONS = [
   { label: 'Mohakhali C/A', address: 'Mohakhali Commercial Area, Dhaka', lat: 23.7788, lng: 90.4032, icon: '🏬' },
 ];
 
-export const TOP_HOSPITALS = [
-  {
-    id: 'dmch',
-    name: 'Dhaka Medical College & Hospital (DMCH)',
-    shortName: 'Dhaka Medical (DMCH)',
-    area: 'Secretariate Rd, Shahbagh, Dhaka',
-    type: 'Government Super-Specialized',
-    emergency: '24/7 Level-1 Trauma, Burn Unit & CCU',
-    hotline: '01711-234567',
-    phone: '02-55165555',
-    icon: '🏥',
-    popular: true,
-  },
-  {
-    id: 'square',
-    name: 'Square Hospitals Ltd.',
-    shortName: 'Square Hospital',
-    area: '18/F Panthapath, Dhaka',
-    type: 'Private Tertiary Care',
-    emergency: '24/7 Emergency, Stroke & Cardiac Center',
-    hotline: '10616',
-    phone: '01713-377775',
-    icon: '🏥',
-    popular: true,
-  },
-  {
-    id: 'evercare',
-    name: 'Evercare Hospital Dhaka',
-    shortName: 'Evercare Hospital',
-    area: 'Plot 81, Block E, Bashundhara R/A, Dhaka',
-    type: 'Private Multi-Disciplinary',
-    emergency: 'JCI Accredited, 24/7 Critical Care & Trauma',
-    hotline: '10678',
-    phone: '09666710678',
-    icon: '🏥',
-    popular: true,
-  },
-  {
-    id: 'united',
-    name: 'United Hospital Gulshan',
-    shortName: 'United Hospital',
-    area: 'Plot 15, Road 71, Gulshan 2, Dhaka',
-    type: 'Private Specialized',
-    emergency: '24/7 Comprehensive Cardiac & ER Care',
-    hotline: '10666',
-    phone: '01914-001234',
-    icon: '🏥',
-    popular: true,
-  },
-  {
-    id: 'bsmmu',
-    name: 'Bangabandhu Sheikh Mujib Medical University (BSMMU)',
-    shortName: 'BSMMU (PG Hospital)',
-    area: 'Shahbagh, Dhaka',
-    type: 'Public Medical University',
-    emergency: 'Super-Specialized Research & Emergency ICU',
-    hotline: '01712-987654',
-    phone: '02-9661051',
-    icon: '🏥',
-    popular: true,
-  },
-  {
-    id: 'birdem',
-    name: 'BIRDEM General Hospital',
-    shortName: 'BIRDEM Hospital',
-    area: '122 Kazi Nazrul Islam Ave, Shahbagh, Dhaka',
-    type: 'Specialized Endocrine & General',
-    emergency: '24/7 ICU, Nephrology & Emergency Triage',
-    hotline: '10615',
-    phone: '02-9661551',
-    icon: '🏥',
-    popular: true,
-  },
-  {
-    id: 'nicvd',
-    name: 'National Institute of Cardiovascular Diseases (NICVD)',
-    shortName: 'NICVD (National Heart)',
-    area: 'Sher-e-Bangla Nagar, Dhaka',
-    type: 'National Apex Cardiac Center',
-    emergency: 'National Emergency Cardiac Cath-Lab & CCU',
-    hotline: '01715-667788',
-    phone: '02-9122560',
-    icon: '❤️',
-    popular: true,
-  },
-  {
-    id: 'nitor',
-    name: 'National Institute of Traumatology & Orthopaedics (NITOR)',
-    shortName: 'NITOR (Pongu / Trauma)',
-    area: 'Sher-e-Bangla Nagar, Dhaka',
-    type: 'Apex Orthopedic & Trauma Center',
-    emergency: '24/7 Emergency Bone & Polytrauma Surgery',
-    hotline: '02-9114075',
-    phone: '02-9114075',
-    icon: '🩹',
-    popular: true,
-  },
-  {
-    id: 'kurmitola',
-    name: 'Kurmitola General Hospital',
-    shortName: 'Kurmitola General',
-    area: 'Dhaka-Mymensingh Rd, Dhaka Cantonment',
-    type: 'Government General Hospital',
-    emergency: '24/7 Acute Trauma & General Emergency Care',
-    hotline: '01769-010200',
-    phone: '02-55067201',
-    icon: '🏥',
-    popular: false,
-  },
-  {
-    id: 'shishu',
-    name: 'Dhaka Shishu (Children) Hospital',
-    shortName: 'Dhaka Shishu Hospital',
-    area: 'Sher-e-Bangla Nagar, Dhaka',
-    type: 'Specialized Pediatric Emergency',
-    emergency: '24/7 Pediatric Emergency & Neonatal ICU',
-    hotline: '02-58153401',
-    phone: '02-58153401',
-    icon: '👶',
-    popular: false,
-  },
-  {
-    id: 'labaid',
-    name: 'Labaid Specialized Hospital',
-    shortName: 'Labaid Hospital',
-    area: 'House 6, Road 4, Dhanmondi, Dhaka',
-    type: 'Private Specialized Cardiac',
-    emergency: '24/7 Cardiac Emergency Unit & CCU',
-    hotline: '10606',
-    phone: '02-9676356',
-    icon: '🏥',
-    popular: false,
-  },
-  {
-    id: 'ibnsina',
-    name: 'Ibn Sina Specialized Hospital',
-    shortName: 'Ibn Sina Hospital',
-    area: 'House 68, Road 15/A, Dhanmondi, Dhaka',
-    type: 'Private Multi-Disciplinary',
-    emergency: '24/7 Emergency, Stroke & Trauma Care',
-    hotline: '10615',
-    phone: '02-9126625',
-    icon: '🏥',
-    popular: false,
-  },
-];
-
 export default function RequestPage() {
   const router = useRouter();
   const { location: currentGeoLoc, getLocation, loading: geoLoading } = useGeolocation();
@@ -206,6 +62,16 @@ export default function RequestPage() {
   });
 
   const [pickupCoords, setPickupCoords] = useState({ lat: 23.8103, lng: 90.4125 });
+
+  // Dynamically compute closest hospitals & ambulances strictly around the user's active pickup spot
+  const nearbyHospitals = useMemo(() => {
+    return getNearbyHospitals(pickupCoords.lat, pickupCoords.lng, form.pickupLocation, 25);
+  }, [pickupCoords.lat, pickupCoords.lng, form.pickupLocation]);
+
+  const nearbyAmbulances = useMemo(() => {
+    return generateNearbyAmbulances(pickupCoords.lat, pickupCoords.lng, form.pickupLocation);
+  }, [pickupCoords.lat, pickupCoords.lng, form.pickupLocation]);
+
   const [showMapPicker, setShowMapPicker] = useState(false);
   const [showAreaDropdown, setShowAreaDropdown] = useState(false);
   const [geocodingLoading, setGeocodingLoading] = useState(false);
@@ -242,26 +108,26 @@ export default function RequestPage() {
     setShowHospitalModal(false);
   };
 
-  // Find matched hospital object if any
-  const matchedHospital = TOP_HOSPITALS.find(
+  // Find matched hospital object if any (checked against proximity-calculated list)
+  const matchedHospital = nearbyHospitals.find(
     (h) =>
       form.destination.trim() &&
       (h.name.toLowerCase() === form.destination.trim().toLowerCase() ||
         h.shortName.toLowerCase() === form.destination.trim().toLowerCase() ||
         form.destination.toLowerCase().includes(h.shortName.toLowerCase()) ||
         (form.destination.length > 5 && h.name.toLowerCase().includes(form.destination.toLowerCase())))
-  );
+  ) || TOP_HOSPITALS.find((h) => form.destination.toLowerCase().includes(h.shortName.toLowerCase()));
 
-  // Filtered hospitals based on user search
+  // Filtered hospitals based on user search, prioritized by distance from user's pickup point
   const filteredHospitals = form.destination.trim()
-    ? TOP_HOSPITALS.filter(
+    ? nearbyHospitals.filter(
         (h) =>
           h.name.toLowerCase().includes(form.destination.toLowerCase()) ||
           h.shortName.toLowerCase().includes(form.destination.toLowerCase()) ||
           h.area.toLowerCase().includes(form.destination.toLowerCase()) ||
           h.emergency.toLowerCase().includes(form.destination.toLowerCase())
       )
-    : TOP_HOSPITALS;
+    : nearbyHospitals;
 
   // Reverse geocode coordinates to clean readable address (e.g., "Nikunja 2, Khilkhet, Dhaka")
   const reverseGeocode = useCallback(async (lat, lng) => {
@@ -742,7 +608,7 @@ export default function RequestPage() {
                 </span>
               </div>
               <span className="text-emerald-700 font-bold shrink-0 bg-emerald-100/60 px-2 py-0.5 rounded-md text-[10px]">
-                ⚡ 4 Ambulances Nearby (~4 min away)
+                ⚡ {nearbyAmbulances.length} Ambulances • {nearbyHospitals.length} Hospitals Nearby
               </span>
             </div>
 
@@ -795,7 +661,12 @@ export default function RequestPage() {
                   <MapView
                     center={[pickupCoords.lat, pickupCoords.lng]}
                     userLocation={pickupCoords}
+                    ambulances={nearbyAmbulances}
+                    hospitals={nearbyHospitals}
                     onLocationSelect={handleMapPin}
+                    onHospitalClick={(h) => {
+                      selectHospital(h);
+                    }}
                     zoom={15}
                     height="100%"
                   />
@@ -891,11 +762,11 @@ export default function RequestPage() {
                   className="text-xs text-emerald-600 hover:text-emerald-700 font-semibold flex items-center gap-1 bg-emerald-50 hover:bg-emerald-100 px-2.5 py-1 rounded-lg border border-emerald-100 transition-all active:scale-95"
                 >
                   <Hospital size={12} />
-                  <span>Browse Hospitals ({TOP_HOSPITALS.length})</span>
+                  <span>Browse Hospitals ({nearbyHospitals.length})</span>
                 </button>
               </div>
 
-              {/* Quick Hospital Preset Chips */}
+              {/* Quick Hospital Preset Chips (Prioritized by proximity from pickup spot) */}
               <div className="flex items-center gap-1.5 overflow-x-auto pb-2 scrollbar-hide">
                 <button
                   type="button"
@@ -908,20 +779,28 @@ export default function RequestPage() {
                 >
                   🚑 Nearest Emergency ER (Auto)
                 </button>
-                {TOP_HOSPITALS.filter((h) => h.popular).map((h) => {
+                {nearbyHospitals.slice(0, 7).map((h) => {
                   const isSelected = form.destination === h.name;
                   return (
                     <button
                       key={h.id}
                       type="button"
                       onClick={() => selectHospital(h)}
-                      className={`shrink-0 text-[11px] font-medium px-2.5 py-1 rounded-lg border transition-all active:scale-95 ${
+                      className={`shrink-0 text-[11px] font-medium px-2.5 py-1 rounded-lg border transition-all active:scale-95 flex items-center gap-1 ${
                         isSelected
                           ? 'bg-emerald-600 text-white border-emerald-600 shadow-sm font-bold'
                           : 'bg-gray-50 hover:bg-emerald-50 text-gray-700 border-gray-200 hover:border-emerald-200'
                       }`}
                     >
-                      {h.icon} {h.shortName}
+                      <span>{h.icon}</span>
+                      <span>{h.shortName || h.name}</span>
+                      {h.distance !== undefined && (
+                        <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-mono ${
+                          isSelected ? 'bg-white/25 text-white' : 'bg-emerald-100 text-emerald-800'
+                        }`}>
+                          {h.distance}km
+                        </span>
+                      )}
                     </button>
                   );
                 })}
@@ -998,7 +877,14 @@ export default function RequestPage() {
                             <span className="text-base shrink-0 mt-0.5">{h.icon}</span>
                             <div className="min-w-0">
                               <p className="font-bold text-gray-900 truncate">{h.name}</p>
-                              <p className="text-[11px] text-gray-500 truncate">📍 {h.area}</p>
+                              <div className="flex items-center gap-1.5 flex-wrap mt-0.5">
+                                {h.distance !== undefined && (
+                                  <span className="text-[10px] font-bold text-emerald-800 bg-emerald-100/70 px-1.5 py-0.2 rounded">
+                                    📍 {h.distance} km (~{h.estimatedTime}m)
+                                  </span>
+                                )}
+                                <span className="text-[11px] text-gray-500 truncate">{h.area}</span>
+                              </div>
                               <p className="text-[11px] text-emerald-700 font-medium mt-0.5">⚡ {h.emergency}</p>
                             </div>
                           </div>
@@ -1161,9 +1047,9 @@ export default function RequestPage() {
               </button>
             </div>
 
-            {/* Hospital Directory List */}
+            {/* Hospital Directory List (Prioritized by proximity from pickup spot) */}
             <div className="flex-1 overflow-y-auto p-4 space-y-2.5 divide-y divide-gray-50">
-              {TOP_HOSPITALS.map((h) => {
+              {nearbyHospitals.map((h) => {
                 const isSelected = form.destination === h.name;
                 return (
                   <div
@@ -1184,6 +1070,14 @@ export default function RequestPage() {
                             {h.type}
                           </span>
                         </div>
+                        {h.distance !== undefined && (
+                          <p className="text-xs text-emerald-800 font-bold mt-0.5 flex items-center gap-1">
+                            <span>📍</span>
+                            <span>{h.distance} km from your pickup point</span>
+                            <span>•</span>
+                            <span>~{h.estimatedTime} min drive</span>
+                          </p>
+                        )}
                         <p className="text-xs text-gray-500 mt-0.5">📍 {h.area}</p>
                         <p className="text-xs text-emerald-700 font-medium mt-1">🚨 {h.emergency}</p>
                         {h.hotline && (
@@ -1217,7 +1111,7 @@ export default function RequestPage() {
 
             {/* Modal Footer */}
             <div className="p-4 border-t border-gray-100 bg-gray-50 flex items-center justify-between text-xs text-gray-500">
-              <span>{TOP_HOSPITALS.length} major hospitals connected with 24/7 ER units</span>
+              <span>{nearbyHospitals.length} emergency hospitals connected around your pickup point</span>
               <button
                 type="button"
                 onClick={() => setShowHospitalModal(false)}
