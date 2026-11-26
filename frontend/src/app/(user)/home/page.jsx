@@ -119,14 +119,18 @@ export default function HomePage() {
           const latNum = parseFloat(item.latitude || item.lat);
           const lngNum = parseFloat(item.longitude || item.lng);
 
+          const driverName = typeof item.driver === 'string'
+            ? item.driver
+            : (item.driver?.name || item.driver?.user?.name || (item.driver?.licenseNumber ? `Driver (${item.driver.licenseNumber})` : 'Assigned Driver'));
+
           return {
             _id: item.id || item._id || `amb-${idx}`,
             id: item.id || item._id,
             vehicleNumber: item.vehicleNumber || `AMB-00${idx + 1}`,
             type: normalizedType,
             status: item.status === 'available' ? 'Available' : (item.status || 'Available'),
-            driver: item.driver?.name || item.driver || 'Assigned Driver',
-            rating: item.driver?.rating || 4.8,
+            driver: driverName,
+            rating: typeof item.driver === 'object' ? (item.driver?.rating || 4.8) : (item.rating || 4.8),
             lat: !isNaN(latNum) ? latNum : location.lat,
             lng: !isNaN(lngNum) ? lngNum : location.lng,
             location: {

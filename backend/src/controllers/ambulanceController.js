@@ -101,8 +101,14 @@ const getNearbyAmbulances = async (req, res, next) => {
 
     let result = (ambulances || []).map((a) => {
       const plain = a.toJSON ? a.toJSON() : a;
+      const dObj = plain.driver;
+      const driverName = typeof dObj === 'string'
+        ? dObj
+        : (dObj?.name || dObj?.user?.name || (dObj?.licenseNumber ? `Driver (${dObj.licenseNumber})` : 'Assigned Driver'));
+
       return {
         ...plain,
+        driver: driverName,
         distance: plain.distance !== undefined ? Number(parseFloat(plain.distance).toFixed(1)) : 1.5,
       };
     });
@@ -130,7 +136,8 @@ const getNearbyAmbulances = async (req, res, next) => {
         longitude: parseFloat((longitude + s.dLng).toFixed(6)),
         distance: s.baseKm,
         estimatedTime: Math.max(3, Math.round(s.baseKm * 3.2)),
-        driver: {
+        driver: s.driver,
+        driverDetails: {
           id: `driver-${s.id}`,
           licenseNumber: `DL-${s.num}`,
           isOnline: true,

@@ -46,7 +46,9 @@ export default function AmbulanceCard({ ambulance, onSelect, selected = false })
         </div>
 
         {driver && (
-          <p className="text-xs text-gray-500 truncate mb-1">Driver: {driver}</p>
+          <p className="text-xs text-gray-500 truncate mb-1">
+            Driver: {typeof driver === 'object' ? (driver.name || driver.licenseNumber || 'Assigned Driver') : String(driver)}
+          </p>
         )}
 
         <div className="flex items-center gap-3 text-xs text-gray-500">

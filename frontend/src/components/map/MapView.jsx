@@ -667,7 +667,9 @@ export default function MapView({
                 <div className="text-sm">
                   <p className="font-bold text-gray-900">{vNum}</p>
                   <p className="text-red-600 font-medium text-xs">{amb.type || 'Standard'} Ambulance</p>
-                  <p className="text-gray-500 text-xs mt-1">Driver: {amb.driver || 'Assigned Driver'}</p>
+                  <p className="text-gray-500 text-xs mt-1">
+                    Driver: {typeof amb.driver === 'object' ? (amb.driver?.name || amb.driver?.licenseNumber || 'Assigned Driver') : String(amb.driver || 'Assigned Driver')}
+                  </p>
                   {amb.distance !== undefined && (
                     <p className="text-blue-600 font-semibold text-xs mt-0.5">📍 {amb.distance} km away</p>
                   )}
