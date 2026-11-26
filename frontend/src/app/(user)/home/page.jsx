@@ -476,7 +476,7 @@ export default function HomePage() {
               </span>
             </div>
             <Link
-              href={`/request?ambulanceType=${selectedAmbulance.type}&vehicle=${selectedAmbulance.vehicleNumber}`}
+              href={`/request?ambulanceType=${selectedAmbulance.type}&vehicle=${selectedAmbulance.vehicleNumber}&lat=${location?.lat || 23.8103}&lng=${location?.lng || 90.4125}&label=${encodeURIComponent(location?.label || '')}`}
               className="px-3 py-1 rounded-xl text-xs font-bold text-white bg-red-600 hover:bg-red-700 transition shadow-sm active:scale-95 flex items-center gap-1"
             >
               <span>Dispatch Now</span>
