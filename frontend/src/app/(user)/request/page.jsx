@@ -35,11 +35,14 @@ const EMERGENCY_TYPES = [
 ];
 
 const PRESET_LOCATIONS = [
-  { label: '🏥 Dhaka Medical College', address: 'Dhaka Medical College Hospital, Secretariate Rd, Dhaka', lat: 23.7258, lng: 90.3976 },
-  { label: '🏢 Dhanmondi 27', address: 'Dhanmondi Road 27, Dhaka', lat: 23.7535, lng: 90.3703 },
-  { label: '🏬 Uttara Sector 3', address: 'Sector 3, Uttara Model Town, Dhaka', lat: 23.8690, lng: 90.3985 },
-  { label: '🛣️ Mirpur 10', address: 'Mirpur 10 Roundabout, Mirpur, Dhaka', lat: 23.8071, lng: 90.3686 },
-  { label: '🏙️ Gulshan 2', address: 'Gulshan 2 Circle, Gulshan, Dhaka', lat: 23.7925, lng: 90.4172 },
+  { label: 'Daffodil Smart City (Ashulia)', address: 'Daffodil Smart City, Ashulia, Dhaka', lat: 23.8768, lng: 90.3204, icon: '🎓' },
+  { label: 'Dhanmondi, Dhaka', address: 'Dhanmondi Road 27, Dhaka', lat: 23.7461, lng: 90.3742, icon: '🏥' },
+  { label: 'Gulshan 2 Circle', address: 'Gulshan 2 Circle, Gulshan, Dhaka', lat: 23.7925, lng: 90.4078, icon: '🏢' },
+  { label: 'Uttara Sector 7', address: 'Sector 7, Uttara Model Town, Dhaka', lat: 23.8759, lng: 90.3795, icon: '🚆' },
+  { label: 'Mirpur 10 Circle', address: 'Mirpur 10 Roundabout, Mirpur, Dhaka', lat: 23.8069, lng: 90.3687, icon: '🏙️' },
+  { label: 'Dhaka Medical (DMCH)', address: 'Dhaka Medical College Hospital, Shahbagh, Dhaka', lat: 23.7258, lng: 90.3975, icon: '🏛️' },
+  { label: 'Kurmitola / Airport', address: 'Kurmitola General Hospital, Airport Rd, Dhaka', lat: 23.8188, lng: 90.4074, icon: '🛫' },
+  { label: 'Mohakhali C/A', address: 'Mohakhali Commercial Area, Dhaka', lat: 23.7788, lng: 90.4032, icon: '🏬' },
 ];
 
 export const TOP_HOSPITALS = [
@@ -204,6 +207,7 @@ export default function RequestPage() {
 
   const [pickupCoords, setPickupCoords] = useState({ lat: 23.8103, lng: 90.4125 });
   const [showMapPicker, setShowMapPicker] = useState(false);
+  const [showAreaDropdown, setShowAreaDropdown] = useState(false);
   const [geocodingLoading, setGeocodingLoading] = useState(false);
   const [searchSuggestions, setSearchSuggestions] = useState([]);
   const [searchingAddress, setSearchingAddress] = useState(false);
@@ -259,17 +263,6 @@ export default function RequestPage() {
       )
     : TOP_HOSPITALS;
 
-  // Pre-fill destination if passed via URL parameter (e.g., from hospital cards)
-  useEffect(() => {
-    if (typeof window !== 'undefined') {
-      const params = new URLSearchParams(window.location.search);
-      const dest = params.get('destination') || params.get('hospital');
-      if (dest) {
-        setForm((prev) => ({ ...prev, destination: dest }));
-      }
-    }
-  }, []);
-
   // Reverse geocode coordinates to clean readable address (e.g., "Nikunja 2, Khilkhet, Dhaka")
   const reverseGeocode = useCallback(async (lat, lng) => {
     setGeocodingLoading(true);
@@ -299,6 +292,32 @@ export default function RequestPage() {
       setGeocodingLoading(false);
     }
   }, []);
+
+  // Pre-fill destination, ambulanceType, and coordinates if passed via URL parameters
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search);
+      const dest = params.get('destination') || params.get('hospital');
+      if (dest) {
+        setForm((prev) => ({ ...prev, destination: dest }));
+      }
+      const type = params.get('ambulanceType') || params.get('type');
+      if (type) {
+        setForm((prev) => ({ ...prev, ambulanceType: type }));
+      }
+      const lat = parseFloat(params.get('lat'));
+      const lng = parseFloat(params.get('lng'));
+      const label = params.get('label') || params.get('pickup');
+      if (!isNaN(lat) && !isNaN(lng)) {
+        setPickupCoords({ lat, lng });
+        if (label) {
+          setForm((prev) => ({ ...prev, pickupLocation: decodeURIComponent(label) }));
+        } else {
+          reverseGeocode(lat, lng);
+        }
+      }
+    }
+  }, [reverseGeocode]);
 
   // Auto-detect and reverse-geocode initial location on mount
   useEffect(() => {
@@ -633,54 +652,177 @@ export default function RequestPage() {
 
           {/* Locations */}
           <div className="bg-white rounded-2xl border border-gray-100 p-4 space-y-4">
-            <h2 className="font-bold text-gray-800 text-sm flex items-center justify-between">
-              <span>Location Details</span>
-              <span className="text-[11px] font-normal text-emerald-600 flex items-center gap-1">
-                <Sparkles size={12} /> Auto-GPS Enabled
+            <div className="flex items-center justify-between pb-1 border-b border-gray-100">
+              <div className="flex items-center gap-2">
+                <span className="w-7 h-7 rounded-lg bg-red-50 text-red-600 flex items-center justify-center text-sm font-bold">📍</span>
+                <div>
+                  <h2 className="font-bold text-gray-900 text-sm">Pickup Location & Dispatch Point</h2>
+                  <p className="text-[11px] text-gray-500">Select pickup using GPS, Map, Area, or Search</p>
+                </div>
+              </div>
+              <span className="text-[11px] font-semibold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-100 flex items-center gap-1">
+                <Sparkles size={11} /> Auto-GPS Ready
               </span>
-            </h2>
+            </div>
 
-            {/* ── UPGRADED PICKUP LOCATION SECTION ── */}
-            <div>
-              <div className="flex items-center justify-between mb-1.5">
-                <label className="text-sm font-semibold text-gray-700">
-                  Pickup Location <span className="text-red-500">*</span>
-                </label>
-                <div className="flex items-center gap-2">
+            {/* ── 3 MAIN LOCATION SELECTION BUTTONS: Locate Me | Select on Map | Choose Area ── */}
+            <div className="grid grid-cols-3 gap-2">
+              {/* 1. Locate Me */}
+              <button
+                type="button"
+                onClick={handleDetectLiveGPS}
+                disabled={geocodingLoading || geoLoading}
+                className="flex flex-col items-center justify-center p-2.5 rounded-xl border border-emerald-200 bg-emerald-50/70 hover:bg-emerald-100 text-emerald-800 transition-all active:scale-95 shadow-2xs group"
+                title="Detect live GPS from your device"
+              >
+                <div className="flex items-center gap-1.5 mb-1">
+                  <Navigation size={14} className={`text-emerald-600 ${geocodingLoading || geoLoading ? 'animate-spin' : 'group-hover:rotate-12 transition-transform'}`} />
+                  <span className="font-bold text-xs">Locate Me</span>
+                </div>
+                <span className="text-[10px] text-emerald-600 font-medium leading-tight">Live Device GPS</span>
+              </button>
+
+              {/* 2. Select on Map */}
+              <button
+                type="button"
+                onClick={() => {
+                  setShowMapPicker((v) => !v);
+                  if (showAreaDropdown) setShowAreaDropdown(false);
+                }}
+                className={`flex flex-col items-center justify-center p-2.5 rounded-xl border transition-all active:scale-95 shadow-2xs ${
+                  showMapPicker
+                    ? 'bg-blue-600 border-blue-600 text-white'
+                    : 'bg-blue-50/70 border-blue-200 hover:bg-blue-100 text-blue-800'
+                }`}
+                title="Pick exact location by clicking on map"
+              >
+                <div className="flex items-center gap-1.5 mb-1">
+                  <Map size={14} className={showMapPicker ? 'text-white' : 'text-blue-600'} />
+                  <span className="font-bold text-xs">{showMapPicker ? 'Hide Map' : 'Select on Map'}</span>
+                </div>
+                <span className={`text-[10px] font-medium leading-tight ${showMapPicker ? 'text-blue-100' : 'text-blue-600'}`}>
+                  Interactive Pin
+                </span>
+              </button>
+
+              {/* 3. Choose Area / Near Location */}
+              <button
+                type="button"
+                onClick={() => {
+                  setShowAreaDropdown((v) => !v);
+                  if (showMapPicker) setShowMapPicker(false);
+                }}
+                className={`flex flex-col items-center justify-center p-2.5 rounded-xl border transition-all active:scale-95 shadow-2xs ${
+                  showAreaDropdown
+                    ? 'bg-indigo-600 border-indigo-600 text-white'
+                    : 'bg-indigo-50/70 border-indigo-200 hover:bg-indigo-100 text-indigo-800'
+                }`}
+                title="Choose from popular areas and landmarks"
+              >
+                <div className="flex items-center gap-1.5 mb-1">
+                  <Building2 size={14} className={showAreaDropdown ? 'text-white' : 'text-indigo-600'} />
+                  <span className="font-bold text-xs">Choose Area</span>
+                </div>
+                <span className={`text-[10px] font-medium leading-tight ${showAreaDropdown ? 'text-indigo-100' : 'text-indigo-600'}`}>
+                  Landmarks ▾
+                </span>
+              </button>
+            </div>
+
+            {/* Active Location Coordinates & Live Proximity Status Bar */}
+            <div className="flex items-center justify-between px-3 py-1.5 rounded-xl bg-slate-50 border border-slate-200/80 text-[11px]">
+              <div className="flex items-center gap-1.5 text-slate-700 truncate">
+                <span className="relative flex h-2 w-2 shrink-0">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                  <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-600"></span>
+                </span>
+                <span className="font-semibold text-emerald-800 shrink-0">Active Pickup:</span>
+                <span className="font-mono text-slate-500 text-[10.5px] truncate">
+                  {pickupCoords.lat.toFixed(4)}, {pickupCoords.lng.toFixed(4)}
+                </span>
+              </div>
+              <span className="text-emerald-700 font-bold shrink-0 bg-emerald-100/60 px-2 py-0.5 rounded-md text-[10px]">
+                ⚡ 4 Ambulances Nearby (~4 min away)
+              </span>
+            </div>
+
+            {/* Expandable Choose Area / Landmarks Grid */}
+            {showAreaDropdown && (
+              <div className="p-3 bg-indigo-50/60 border border-indigo-100 rounded-xl space-y-2 animate-fade-in">
+                <div className="flex items-center justify-between pb-1 border-b border-indigo-100/80">
+                  <span className="text-xs font-bold text-indigo-950 flex items-center gap-1">
+                    <span>🏢</span> Select Popular Area / Campus:
+                  </span>
                   <button
                     type="button"
-                    onClick={handleDetectLiveGPS}
-                    disabled={geocodingLoading || geoLoading}
-                    className="text-xs text-primary-600 hover:text-primary-700 font-semibold flex items-center gap-1 bg-primary-50 px-2.5 py-1 rounded-lg border border-primary-100 transition-all active:scale-95"
+                    onClick={() => setShowAreaDropdown(false)}
+                    className="text-[11px] text-indigo-600 font-semibold hover:underline"
                   >
-                    <Navigation size={12} className={geocodingLoading || geoLoading ? 'animate-spin' : ''} />
-                    {geocodingLoading ? 'Detecting...' : 'Detect GPS'}
+                    Close ✕
                   </button>
+                </div>
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5">
+                  {PRESET_LOCATIONS.map((preset, idx) => (
+                    <button
+                      key={idx}
+                      type="button"
+                      onClick={() => {
+                        selectPreset(preset);
+                        setShowAreaDropdown(false);
+                      }}
+                      className="flex items-center gap-1.5 p-2 rounded-lg text-left text-[11px] font-medium bg-white hover:bg-indigo-100/80 text-gray-800 border border-indigo-100 transition-all active:scale-95 shadow-2xs"
+                    >
+                      <span className="shrink-0">{preset.icon}</span>
+                      <span className="truncate">{preset.label}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
 
+            {/* Interactive Map Picker (Map Select) */}
+            {showMapPicker && (
+              <div className="rounded-2xl overflow-hidden border border-blue-200 shadow-md animate-fade-in">
+                <div className="bg-gradient-to-r from-blue-600 to-indigo-600 text-white px-3.5 py-2 text-xs font-semibold flex items-center justify-between shadow-xs">
+                  <span className="flex items-center gap-1.5">
+                    <span>📍</span> Click anywhere on the map to pin your exact pickup spot
+                  </span>
+                  <span className="font-mono text-[10.5px] bg-white/20 px-2 py-0.5 rounded-full">
+                    {pickupCoords.lat.toFixed(4)}, {pickupCoords.lng.toFixed(4)}
+                  </span>
+                </div>
+                <div className="h-64 w-full">
+                  <MapView
+                    center={[pickupCoords.lat, pickupCoords.lng]}
+                    userLocation={pickupCoords}
+                    onLocationSelect={handleMapPin}
+                    zoom={15}
+                    height="100%"
+                  />
+                </div>
+                <div className="bg-blue-50 px-3 py-1.5 text-[11px] text-blue-700 flex items-center justify-between border-t border-blue-100">
+                  <span className="truncate">✅ Pinned at: {form.pickupLocation || 'Selected coordinates'}</span>
                   <button
                     type="button"
-                    onClick={() => setShowMapPicker(!showMapPicker)}
-                    className={`text-xs font-semibold flex items-center gap-1 px-2.5 py-1 rounded-lg border transition-all active:scale-95 ${
-                      showMapPicker
-                        ? 'bg-blue-600 text-white border-blue-600'
-                        : 'bg-blue-50 text-blue-600 border-blue-100 hover:bg-blue-100'
-                    }`}
+                    onClick={() => setShowMapPicker(false)}
+                    className="font-bold text-blue-800 hover:underline shrink-0 ml-2"
                   >
-                    <Map size={12} />
-                    {showMapPicker ? 'Hide Map' : 'Pick on Map'}
+                    Confirm Spot
                   </button>
                 </div>
               </div>
+            )}
 
-              {/* Main Address Search Input */}
+            {/* Address Search Bar */}
+            <div>
               <div className="relative">
                 <input
                   type="text"
                   name="pickupLocation"
-                  placeholder="Enter house, road, area, or click Detect GPS"
+                  placeholder="Enter house, road, area, or select above..."
                   value={form.pickupLocation}
                   onChange={handleAddressInputChange}
-                  className={`w-full pl-10 pr-10 py-3 rounded-xl border text-sm transition-all focus:outline-none focus:ring-2 focus:ring-primary-500/20 ${
+                  className={`w-full pl-10 pr-10 py-2.5 rounded-xl border text-sm transition-all focus:outline-none focus:ring-2 focus:ring-primary-500/20 ${
                     errors.pickupLocation ? 'border-red-500' : 'border-gray-200'
                   }`}
                 />
@@ -717,46 +859,20 @@ export default function RequestPage() {
                 <p className="text-xs text-red-500 mt-1">{errors.pickupLocation}</p>
               )}
 
-              {/* Clean Location Coordinates Badge */}
-              <div className="mt-2 flex items-center justify-between text-[11px] text-gray-500">
-                <span className="flex items-center gap-1 font-medium text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-100">
-                  <CheckCircle size={11} /> Exact GPS: {pickupCoords.lat.toFixed(4)}, {pickupCoords.lng.toFixed(4)}
-                </span>
-                <span className="text-gray-400">Tap presets below or click map</span>
-              </div>
-
-              {/* Quick Area Presets */}
+              {/* Quick Area Presets Horizontal Scroll Pills */}
               <div className="mt-2 flex items-center gap-1.5 overflow-x-auto pb-1 scrollbar-hide">
+                <span className="text-[11px] text-gray-400 font-medium shrink-0">Near:</span>
                 {PRESET_LOCATIONS.map((preset, idx) => (
                   <button
                     key={idx}
                     type="button"
                     onClick={() => selectPreset(preset)}
-                    className="shrink-0 text-[11px] font-medium bg-gray-50 hover:bg-gray-100 text-gray-600 px-2.5 py-1 rounded-lg border border-gray-200/60 transition-all active:scale-95"
+                    className="shrink-0 text-[11px] font-medium bg-gray-50 hover:bg-gray-100 text-gray-700 px-2.5 py-1 rounded-lg border border-gray-200/80 transition-all active:scale-95"
                   >
-                    {preset.label}
+                    {preset.icon} {preset.label}
                   </button>
                 ))}
               </div>
-
-              {/* Interactive Inline Map Picker */}
-              {showMapPicker && (
-                <div className="mt-3 rounded-2xl overflow-hidden border border-blue-200 shadow-inner">
-                  <div className="bg-blue-50 px-3 py-1.5 text-[11px] text-blue-700 font-medium flex items-center justify-between">
-                    <span>📍 Click anywhere on the map to pin your exact pickup spot</span>
-                    <span className="font-mono text-[10px]">{pickupCoords.lat.toFixed(4)}, {pickupCoords.lng.toFixed(4)}</span>
-                  </div>
-                  <div className="h-52 w-full">
-                    <MapView
-                      center={[pickupCoords.lat, pickupCoords.lng]}
-                      userLocation={pickupCoords}
-                      onLocationSelect={handleMapPin}
-                      zoom={15}
-                      height="100%"
-                    />
-                  </div>
-                </div>
-              )}
             </div>
 
             {/* ── UPGRADED DESTINATION HOSPITAL SECTION ── */}

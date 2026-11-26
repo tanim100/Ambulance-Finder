@@ -13,8 +13,8 @@ const { protect, requireAdmin } = require('../middleware/auth');
 // GET /api/ambulances
 router.get('/', protect, getAllAmbulances);
 
-// GET /api/ambulances/nearby?lat=&lng=&radius=
-router.get('/nearby', protect, getNearbyAmbulances);
+// GET /api/ambulances/nearby?lat=&lng=&radius= (Public for instant emergency availability discovery)
+router.get('/nearby', getNearbyAmbulances);
 
 // GET /api/ambulances/:id
 router.get('/:id', protect, getAmbulanceById);
