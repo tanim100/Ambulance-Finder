@@ -9,7 +9,7 @@ const types = [
     label: 'Basic',
     emoji: '🚑',
     desc: 'Basic life support',
-    price: 'BDT 500',
+    price: 'BDT 800',
     features: ['First aid', 'Oxygen', 'Stretcher'],
     color: 'border-blue-200 bg-blue-50',
     selectedColor: 'border-blue-500 bg-blue-100 ring-2 ring-blue-300',
