@@ -58,6 +58,8 @@ export default function DriverDashboard() {
           requestId: topReq.requestId,
           patientName: topReq.patientDetails?.name || 'Emergency Patient',
           emergencyType: topReq.patientDetails?.emergencyType || 'General Emergency',
+          requestMode: topReq.patientDetails?.requestMode || (topReq.patientDetails?.emergencyType === 'general' ? 'general' : 'emergency'),
+          scheduledTime: topReq.patientDetails?.scheduledTime || null,
           pickupLocation: topReq.pickup?.address || 'Current Patient Location',
           pickupCoords: { lat: topReq.pickup?.lat || 23.8282, lng: topReq.pickup?.lng || 90.4163 },
           destination: topReq.destination?.name || 'Nearest General Hospital',
@@ -209,11 +211,26 @@ export default function DriverDashboard() {
 
         {/* Incoming Request */}
         {incomingRequest && (
-          <div className="bg-white rounded-2xl border-2 border-primary-500 shadow-xl overflow-hidden animate-in fade-in slide-in-from-bottom">
-            {/* Urgent banner */}
-            <div className="bg-primary-600 text-white px-4 py-2 flex items-center gap-2">
-              <AlertCircle size={16} className="animate-pulse" />
-              <p className="font-bold text-sm">🚨 Incoming Emergency Request!</p>
+          <div className={`bg-white rounded-2xl border-2 shadow-xl overflow-hidden animate-in fade-in slide-in-from-bottom ${
+            incomingRequest.requestMode === 'general' ? 'border-blue-500' : 'border-primary-500'
+          }`}>
+            {/* Urgent / Standard banner */}
+            <div className={`text-white px-4 py-2 flex items-center justify-between ${
+              incomingRequest.requestMode === 'general' ? 'bg-blue-600' : 'bg-primary-600'
+            }`}>
+              <div className="flex items-center gap-2">
+                <AlertCircle size={16} className={incomingRequest.requestMode === 'general' ? '' : 'animate-pulse'} />
+                <p className="font-bold text-sm">
+                  {incomingRequest.requestMode === 'general'
+                    ? '🏥 Incoming General Transfer Request'
+                    : '🚨 Incoming Emergency SOS Request!'}
+                </p>
+              </div>
+              {incomingRequest.scheduledTime && (
+                <span className="text-[11px] bg-white/20 px-2 py-0.5 rounded-full font-semibold">
+                  📅 {new Date(incomingRequest.scheduledTime).toLocaleString()}
+                </span>
+              )}
             </div>
 
             <div className="p-5 space-y-3">

@@ -58,8 +58,28 @@ export default function RequestPage() {
     pickupLocation: '',
     destination: '',
     notes: '',
-    ambulanceType: 'Basic',
+    ambulanceType: 'Advanced',
   });
+  const [requestMode, setRequestMode] = useState('emergency'); // 'emergency' | 'general'
+  const [scheduleOption, setScheduleOption] = useState('now'); // 'now' | 'scheduled'
+  const [scheduledTime, setScheduledTime] = useState('');
+
+  const handleModeSwitch = (mode) => {
+    setRequestMode(mode);
+    if (mode === 'general') {
+      setForm((p) => ({
+        ...p,
+        emergencyType: 'general',
+        ambulanceType: 'Basic',
+      }));
+    } else {
+      setForm((p) => ({
+        ...p,
+        emergencyType: p.emergencyType === 'general' ? '' : p.emergencyType,
+        ambulanceType: p.ambulanceType === 'Basic' ? 'Advanced' : p.ambulanceType,
+      }));
+    }
+  };
 
   const [pickupCoords, setPickupCoords] = useState({ lat: 23.8103, lng: 90.4125 });
 
@@ -166,6 +186,10 @@ export default function RequestPage() {
       const dest = params.get('destination') || params.get('hospital');
       if (dest) {
         setForm((prev) => ({ ...prev, destination: dest }));
+      }
+      const modeParam = params.get('mode');
+      if (modeParam === 'general' || modeParam === 'emergency') {
+        handleModeSwitch(modeParam);
       }
       const type = params.get('ambulanceType') || params.get('type');
       if (type) {
@@ -352,7 +376,9 @@ export default function RequestPage() {
         lng: destLng,
       },
       patientName: form.patientName,
-      emergencyType: form.emergencyType,
+      emergencyType: form.emergencyType || (requestMode === 'general' ? 'general' : 'accident'),
+      requestMode,
+      scheduledTime: requestMode === 'general' && scheduleOption === 'scheduled' ? scheduledTime : null,
       notes: form.notes,
       ambulanceType: form.ambulanceType,
     };
@@ -403,7 +429,9 @@ export default function RequestPage() {
         patientDetails: {
           name: form.patientName,
           phone: form.phone || '+880 1700-000000',
-          emergencyType: form.emergencyType,
+          emergencyType: form.emergencyType || (requestMode === 'general' ? 'general' : 'accident'),
+          requestMode,
+          scheduledTime: requestMode === 'general' && scheduleOption === 'scheduled' ? scheduledTime : null,
           ambulanceType: form.ambulanceType,
           notes: form.notes,
         },
@@ -510,6 +538,123 @@ export default function RequestPage() {
       {/* Form */}
       <div className="flex-1 max-w-xl mx-auto w-full px-4 py-6">
         <form onSubmit={handleSubmit} className="space-y-5">
+          {/* ── Request Mode Switcher: Emergency SOS vs General Transfer ── */}
+          <div className="bg-white rounded-2xl border border-gray-100 p-4 space-y-3 shadow-2xs">
+            <div className="flex items-center justify-between">
+              <h2 className="font-bold text-gray-900 text-sm">Select Request Type</h2>
+              <span className={`text-[10.5px] font-bold px-2.5 py-0.5 rounded-full ${
+                requestMode === 'emergency'
+                  ? 'bg-red-100 text-red-700'
+                  : 'bg-blue-100 text-blue-700'
+              }`}>
+                {requestMode === 'emergency' ? '🚨 SOS Priority Mode' : '🏥 Standard Transfer Mode'}
+              </span>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+              {/* Emergency Request Card */}
+              <button
+                type="button"
+                onClick={() => handleModeSwitch('emergency')}
+                className={`p-3.5 rounded-2xl border-2 text-left transition-all cursor-pointer ${
+                  requestMode === 'emergency'
+                    ? 'border-red-500 bg-red-50/70 shadow-sm ring-2 ring-red-500/15'
+                    : 'border-gray-200 bg-gray-50/50 hover:border-red-200'
+                }`}
+              >
+                <div className="flex items-center justify-between mb-1">
+                  <span className="font-bold text-sm text-red-700 flex items-center gap-1.5">
+                    <span>🚨</span>
+                    <span>Emergency Request</span>
+                  </span>
+                  <span className="text-[10px] font-bold bg-red-600 text-white px-2 py-0.5 rounded-full">
+                    URGENT
+                  </span>
+                </div>
+                <p className="text-[11px] text-gray-600 leading-relaxed">
+                  Critical / life-threatening cases. Priority siren dispatch, ICU/Advanced unit & instant nearest ER routing.
+                </p>
+              </button>
+
+              {/* General Request Card */}
+              <button
+                type="button"
+                onClick={() => handleModeSwitch('general')}
+                className={`p-3.5 rounded-2xl border-2 text-left transition-all cursor-pointer ${
+                  requestMode === 'general'
+                    ? 'border-blue-500 bg-blue-50/70 shadow-sm ring-2 ring-blue-500/15'
+                    : 'border-gray-200 bg-gray-50/50 hover:border-blue-200'
+                }`}
+              >
+                <div className="flex items-center justify-between mb-1">
+                  <span className="font-bold text-sm text-blue-700 flex items-center gap-1.5">
+                    <span>🏥</span>
+                    <span>General Request</span>
+                  </span>
+                  <span className="text-[10px] font-bold bg-blue-600 text-white px-2 py-0.5 rounded-full">
+                    STANDARD
+                  </span>
+                </div>
+                <p className="text-[11px] text-gray-600 leading-relaxed">
+                  Routine checkup, hospital discharge, or non-critical patient transfer. Basic ambulance & optional scheduling.
+                </p>
+              </button>
+            </div>
+
+            {/* Mode Difference Summary Bar */}
+            <div className={`px-3 py-2 rounded-xl text-[11px] font-medium flex items-start gap-2 border ${
+              requestMode === 'emergency'
+                ? 'bg-red-50/60 border-red-200 text-red-800'
+                : 'bg-blue-50/60 border-blue-200 text-blue-800'
+            }`}>
+              <Info size={14} className="shrink-0 mt-0.5" />
+              <span>
+                {requestMode === 'emergency'
+                  ? 'Emergency Mode: Highest driver alert priority, siren-enabled dispatch, and automatic routing to the closest trauma/ER hospital.'
+                  : 'General Mode: Standard queue dispatch for planned/non-critical transport. You can request now or schedule a pickup time below.'}
+              </span>
+            </div>
+
+            {/* Optional Scheduling for General Request */}
+            {requestMode === 'general' && (
+              <div className="pt-1 border-t border-gray-100 space-y-2">
+                <label className="block text-xs font-semibold text-gray-700">Pickup Timing</label>
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setScheduleOption('now')}
+                    className={`py-2 px-3 rounded-xl text-xs font-semibold border transition ${
+                      scheduleOption === 'now'
+                        ? 'bg-blue-600 text-white border-blue-600'
+                        : 'bg-white text-gray-700 border-gray-200 hover:bg-gray-50'
+                    }`}
+                  >
+                    ⚡ Standard Now
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setScheduleOption('scheduled')}
+                    className={`py-2 px-3 rounded-xl text-xs font-semibold border transition ${
+                      scheduleOption === 'scheduled'
+                        ? 'bg-blue-600 text-white border-blue-600'
+                        : 'bg-white text-gray-700 border-gray-200 hover:bg-gray-50'
+                    }`}
+                  >
+                    📅 Schedule Time
+                  </button>
+                </div>
+                {scheduleOption === 'scheduled' && (
+                  <input
+                    type="datetime-local"
+                    value={scheduledTime}
+                    onChange={(e) => setScheduledTime(e.target.value)}
+                    className="w-full px-3 py-2 rounded-xl border border-gray-200 text-xs text-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                )}
+              </div>
+            )}
+          </div>
+
           {/* Patient info */}
           <div className="bg-white rounded-2xl border border-gray-100 p-4 space-y-4">
             <h2 className="font-bold text-gray-800 text-sm">Patient Details</h2>
@@ -523,9 +668,9 @@ export default function RequestPage() {
               required
             />
             <Select
-              label="Emergency Type"
+              label={requestMode === 'emergency' ? 'Emergency Nature' : 'Transfer / Visit Reason'}
               name="emergencyType"
-              placeholder="Select emergency nature"
+              placeholder={requestMode === 'emergency' ? 'Select emergency nature' : 'Select reason for transfer'}
               value={form.emergencyType}
               onChange={handleChange}
               options={EMERGENCY_TYPES}
@@ -1014,9 +1159,15 @@ export default function RequestPage() {
             fullWidth
             size="xl"
             loading={loading}
-            className="shadow-xl shadow-primary-500/25"
+            className={`shadow-xl ${
+              requestMode === 'emergency'
+                ? 'shadow-red-500/25 bg-red-600 hover:bg-red-700'
+                : 'shadow-blue-500/25 bg-blue-600 hover:bg-blue-700'
+            }`}
           >
-            🚨 Request Ambulance Now
+            {requestMode === 'emergency'
+              ? '🚨 Dispatch Emergency Ambulance Now'
+              : '🏥 Book General Ambulance'}
           </Button>
         </form>
       </div>
