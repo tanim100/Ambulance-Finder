@@ -38,7 +38,7 @@ const DEFAULT_SETTINGS = {
   priorityICUOverride: true,
 
   // Pricing
-  baseFareBasic: 800,
+  baseFareBasic: 1000,
   baseFareAdvanced: 1500,
   baseFareICU: 4000,
   ratePerKm: 35,
