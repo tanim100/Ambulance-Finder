@@ -92,7 +92,9 @@ export function useGeolocation() {
     async ({ forceFresh = false } = {}) => {
       if (typeof window === 'undefined') return null;
 
-      // If not forced fresh, check if user previously saved a location
+      // Check saved location: if user explicitly pinned/selected a location, use it;
+      // otherwise use cached location as instant placeholder while fetching fresh GPS.
+      let savedFallback = null;
       if (!forceFresh) {
         try {
           const saved = localStorage.getItem('user_last_location');
@@ -100,7 +102,10 @@ export function useGeolocation() {
             const parsed = JSON.parse(saved);
             if (parsed?.lat && parsed?.lng) {
               setLocation(parsed);
-              return parsed;
+              savedFallback = parsed;
+              if (parsed.source === 'manual-pin') {
+                return parsed;
+              }
             }
           }
         } catch {}
@@ -180,9 +185,14 @@ export function useGeolocation() {
                   setPermissionState('denied');
                   setError('Location permission denied in browser. Click anywhere on map to set your location.');
                 } else {
-                  setError('GPS unavailable on this PC. Click map or select an area below.');
+                  setError('GPS unavailable on this device. Using network location or select an area.');
                 }
-                resolve(null);
+                if (!savedFallback) {
+                  const ipLoc = await fetchIPLocation();
+                  resolve(ipLoc);
+                } else {
+                  resolve(savedFallback);
+                }
               },
               { enableHighAccuracy: false, timeout: 8000, maximumAge: 0 }
             );

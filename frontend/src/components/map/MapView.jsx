@@ -360,7 +360,7 @@ function MapFitBounds({ userLocation, driverLocation, hospitalLocation, phaseKey
       }
     }
 
-    const key = `${isHospital ? 'hosp' : 'pickup'}_${validPoints.map(p => `${p[0].toFixed(2)}_${p[1].toFixed(2)}`).join('-')}`;
+    const key = `${isHospital ? 'hosp' : 'pickup'}_${validPoints.map(p => `${p[0].toFixed(4)}_${p[1].toFixed(4)}`).join('-')}`;
     if (lastKeyRef.current === key) return;
     lastKeyRef.current = key;
 
@@ -373,6 +373,29 @@ function MapFitBounds({ userLocation, driverLocation, hospitalLocation, phaseKey
       map.setView(validPoints[0], 15, { animate: true, duration: 0.8 });
     }
   }, [userLocation, driverLocation, hospitalLocation, phaseKey, map]);
+
+  return null;
+}
+
+// ── Reactive Center Controller (Re-centers map when `center` prop updates) ──
+function MapCenterController({ center, hasActiveRoute }) {
+  const map = useMap();
+  const lastCenterRef = useRef('');
+
+  useEffect(() => {
+    if (hasActiveRoute) return; // MapFitBounds handles camera during active navigation routes
+    if (!Array.isArray(center) || typeof center[0] !== 'number' || typeof center[1] !== 'number') return;
+
+    const key = `${center[0].toFixed(4)}_${center[1].toFixed(4)}`;
+    if (lastCenterRef.current === key) return;
+    lastCenterRef.current = key;
+
+    try {
+      map.flyTo(center, Math.max(map.getZoom(), 14), { animate: true, duration: 0.6 });
+    } catch {
+      map.setView(center, 14);
+    }
+  }, [center?.[0], center?.[1], hasActiveRoute, map]);
 
   return null;
 }
@@ -541,6 +564,12 @@ export default function MapView({
           driverLocation={driverLocation}
           hospitalLocation={hospitalLocation}
           phaseKey={phaseKey}
+        />
+
+        {/* Reactive Center Controller for User Location / Card Selection */}
+        <MapCenterController
+          center={center}
+          hasActiveRoute={Boolean(route && route.length > 1)}
         />
 
         {/* Floating In-Map Camera & Tile Controls */}

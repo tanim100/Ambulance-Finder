@@ -30,11 +30,23 @@ const getAllAmbulances = async (req, res, next) => {
       order: [['createdAt', 'DESC']],
     });
 
+    // Convert driver objects to safe strings to prevent React "Objects are not valid as a React child" errors
+    const safeAmbulances = (ambulances || []).map((a) => {
+      const plain = a.toJSON ? a.toJSON() : { ...a };
+      const dObj = plain.driver;
+      if (dObj && typeof dObj === 'object') {
+        plain.driver = dObj.name || (dObj.licenseNumber ? `Driver (${dObj.licenseNumber})` : 'Assigned Driver');
+        plain.driverRating = dObj.rating || null;
+        plain.driverOnline = dObj.isOnline || false;
+      }
+      return plain;
+    });
+
     return res.status(200).json({
       success: true,
       message: 'Ambulances retrieved successfully',
       data: {
-        ambulances,
+        ambulances: safeAmbulances,
         pagination: {
           total: count,
           page: parsedPage,
@@ -182,10 +194,18 @@ const getAmbulanceById = async (req, res, next) => {
       });
     }
 
+    // Convert driver object to safe string
+    const plain = ambulance.toJSON ? ambulance.toJSON() : { ...ambulance };
+    const dObj = plain.driver;
+    if (dObj && typeof dObj === 'object') {
+      plain.driverDetails = dObj;
+      plain.driver = dObj.name || (dObj.licenseNumber ? `Driver (${dObj.licenseNumber})` : 'Assigned Driver');
+    }
+
     return res.status(200).json({
       success: true,
       message: 'Ambulance retrieved successfully',
-      data: { ambulance },
+      data: { ambulance: plain },
     });
   } catch (error) {
     next(error);

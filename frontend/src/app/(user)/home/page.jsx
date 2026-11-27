@@ -190,14 +190,32 @@ export default function HomePage() {
     return () => unsub();
   }, []);
 
-  // Merge live Firebase driver into the list if active
+  // Merge live Firebase driver into the list only if it is within 25 km of user's active location — also sanitize any remaining driver objects
+  const isLiveDriverNearby = useMemo(() => {
+    if (!liveDriverPos || !location) return false;
+    const dLat = liveDriverPos.lat - location.lat;
+    const dLng = liveDriverPos.lng - location.lng;
+    const approxKm = Math.sqrt(dLat * dLat + dLng * dLng) * 111;
+    return approxKm <= 25;
+  }, [liveDriverPos, location]);
+
   const allAmbulances = useMemo(() => {
-    if (liveDriverPos) {
+    const sanitize = (list) => list.map((a) => {
+      if (a.driver && typeof a.driver === 'object') {
+        return {
+          ...a,
+          driver: a.driver.name || a.driver.licenseNumber || 'Assigned Driver',
+          rating: a.driver.rating || a.rating || 4.8,
+        };
+      }
+      return a;
+    });
+    if (liveDriverPos && isLiveDriverNearby) {
       const filtered = ambulances.filter((a) => a._id !== 'live-driver-stream');
-      return [liveDriverPos, ...filtered];
+      return sanitize([liveDriverPos, ...filtered]);
     }
-    return ambulances;
-  }, [ambulances, liveDriverPos]);
+    return sanitize(ambulances);
+  }, [ambulances, liveDriverPos, isLiveDriverNearby]);
 
   // Synchronous filter calculation
   const filteredAmbulances = useMemo(() => {
@@ -272,7 +290,7 @@ export default function HomePage() {
             userLocation={location}
             ambulances={filteredAmbulances}
             hospitals={hospitals}
-            driverLocation={liveDriverPos ? { lat: liveDriverPos.lat, lng: liveDriverPos.lng, speed: liveDriverPos.speed } : null}
+            driverLocation={isLiveDriverNearby && liveDriverPos ? { lat: liveDriverPos.lat, lng: liveDriverPos.lng, speed: liveDriverPos.speed } : null}
             onAmbulanceClick={setSelectedAmbulance}
             onHospitalClick={(h) => {
               setSelectedHospital(h);

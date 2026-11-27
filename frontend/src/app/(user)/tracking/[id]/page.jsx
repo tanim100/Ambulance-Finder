@@ -1,6 +1,6 @@
 // src/app/(user)/tracking/[id]/page.jsx
 'use client';
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import dynamic from 'next/dynamic';
 import Link from 'next/link';
@@ -16,6 +16,7 @@ import {
   updateUserLiveLocation,
   completeOrCancelTrip,
 } from '@/lib/firebaseTracking';
+import { getNearbyHospitals, TOP_HOSPITALS } from '@/lib/hospitalData';
 import { Play, Pause, RotateCcw, Navigation, CheckCircle2, Phone, Hospital, ChevronRight, AlertCircle } from 'lucide-react';
 
 // Leaflet map — no SSR
@@ -98,11 +99,25 @@ function calculateDistance(lat1, lon1, lat2, lon2) {
   return R * c;
 }
 
-// Get user's current GPS location with high accuracy
+// Get user's current GPS location with high accuracy, falling back to saved user_last_location
+function getSavedLastLocation() {
+  if (typeof window === 'undefined') return null;
+  try {
+    const saved = localStorage.getItem('user_last_location');
+    if (saved) {
+      const parsed = JSON.parse(saved);
+      if (typeof parsed?.lat === 'number' && typeof parsed?.lng === 'number') {
+        return { lat: parsed.lat, lng: parsed.lng, label: parsed.label };
+      }
+    }
+  } catch {}
+  return null;
+}
+
 function getUserCurrentLocation() {
   return new Promise((resolve) => {
     if (typeof window === 'undefined' || !navigator?.geolocation) {
-      resolve(null);
+      resolve(getSavedLastLocation());
       return;
     }
 
@@ -113,7 +128,7 @@ function getUserCurrentLocation() {
       () => {
         navigator.geolocation.getCurrentPosition(
           (pos) => resolve({ lat: pos.coords.latitude, lng: pos.coords.longitude }),
-          () => resolve(null),
+          () => resolve(getSavedLastLocation()),
           { enableHighAccuracy: false, timeout: 8000, maximumAge: 30000 }
         );
       },
@@ -134,7 +149,19 @@ export default function TrackingPage() {
 
   // Trip Phase: 'pickup' (Driver -> Patient) or 'hospital' (Patient -> Hospital)
   const [tripPhase, setTripPhase] = useState('pickup');
+  const nearbyHospitals = useMemo(
+    () => getNearbyHospitals(patientPos?.lat ?? 23.8103, patientPos?.lng ?? 90.4125, pickupAddress, 5),
+    [patientPos?.lat, patientPos?.lng, pickupAddress]
+  );
   const [selectedHospital, setSelectedHospital] = useState(NEARBY_HOSPITALS[0]);
+  const hasExplicitHospitalRef = useRef(false);
+
+  // Keep default destination hospital synced to the nearest hospital around user's actual location
+  useEffect(() => {
+    if (!hasExplicitHospitalRef.current && nearbyHospitals.length > 0 && patientPos) {
+      setSelectedHospital(nearbyHospitals[0]);
+    }
+  }, [nearbyHospitals, patientPos]);
   const [roadRoute, setRoadRoute] = useState(null);
   const [roadStats, setRoadStats] = useState({ distanceKm: null, durationMin: null });
 
@@ -233,11 +260,14 @@ export default function TrackingPage() {
         }
 
         if (b.destination) {
-          const matched = NEARBY_HOSPITALS.find((h) =>
+          const matched = TOP_HOSPITALS.find((h) =>
             h.name.toLowerCase().includes(b.destination.toLowerCase()) ||
             b.destination.toLowerCase().includes(h.shortName.toLowerCase())
           );
-          if (matched) setSelectedHospital(matched);
+          if (matched) {
+            hasExplicitHospitalRef.current = true;
+            setSelectedHospital(matched);
+          }
         }
 
         const pLat = b.pickupLat ?? b.pickup_lat ?? null;
@@ -256,12 +286,14 @@ export default function TrackingPage() {
         }
       } catch {
         const userGPS = await getUserCurrentLocation();
-        const initialPt = userGPS || { lat: 23.8282, lng: 90.4163 };
+        const savedLoc = getSavedLastLocation();
+        const initialPt = userGPS || savedLoc || { lat: 23.8103, lng: 90.4125 };
+        const closestHosp = getNearbyHospitals(initialPt.lat, initialPt.lng, savedLoc?.label || '', 1)[0];
         const fallbackBooking = {
           id: id || 'active_trip',
           status: 'En Route',
-          pickupAddress: 'Nikunja 2, Khilkhet, Dhaka',
-          destination: 'Kurmitola General Hospital',
+          pickupAddress: savedLoc?.label || 'Your Current Location',
+          destination: closestHosp?.name || 'Nearest Emergency Hospital',
           driver: {
             name: 'Assigned Driver',
             phone: '01942809157',
@@ -270,7 +302,8 @@ export default function TrackingPage() {
           },
         };
         setBooking(fallbackBooking);
-        setPatientPos(initialPt);
+        setPatientPos({ lat: initialPt.lat, lng: initialPt.lng });
+        if (savedLoc?.label) setPickupAddress(savedLoc.label);
         reverseGeocodePickup(initialPt.lat, initialPt.lng);
       } finally {
         setLoading(false);
@@ -302,11 +335,14 @@ export default function TrackingPage() {
         }
 
         if (reqData.destination) {
-          const matched = NEARBY_HOSPITALS.find((h) =>
+          const matched = TOP_HOSPITALS.find((h) =>
             h.name.toLowerCase().includes(reqData.destination.name?.toLowerCase() || '') ||
             (reqData.destination.name || '').toLowerCase().includes(h.shortName.toLowerCase())
           );
-          if (matched) setSelectedHospital(matched);
+          if (matched) {
+            hasExplicitHospitalRef.current = true;
+            setSelectedHospital(matched);
+          }
         }
 
         if (reqData.status === 'Heading to Hospital' || reqData.status === 'heading_to_hospital') {
@@ -328,10 +364,19 @@ export default function TrackingPage() {
       }
     });
 
-    // 3. Fallback to legacy live_tracking
+    // 3. Fallback to legacy live_tracking (ignore stale data > 50 km from patient)
     const unsubLegacy = subscribeToAmbulanceLocation(id, (liveData) => {
       if (liveData && liveData.lat != null && liveData.lng != null) {
-        setDriverPos({ lat: Number(liveData.lat), lng: Number(liveData.lng) });
+        const dLat = Number(liveData.lat);
+        const dLng = Number(liveData.lng);
+        setPatientPos((curPatient) => {
+          if (curPatient) {
+            const dist = calculateDistance(curPatient.lat, curPatient.lng, dLat, dLng);
+            if (dist != null && dist > 50) return curPatient; // Ignore stale test coordinates from another city
+          }
+          setDriverPos({ lat: dLat, lng: dLng });
+          return curPatient;
+        });
       }
     });
 
@@ -797,7 +842,7 @@ export default function TrackingPage() {
           </div>
 
           <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-2">
-            {NEARBY_HOSPITALS.map((h) => {
+            {nearbyHospitals.map((h) => {
               const isSelected = selectedHospital.id === h.id;
               return (
                 <button
