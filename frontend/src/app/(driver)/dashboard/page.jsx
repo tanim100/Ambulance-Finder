@@ -88,14 +88,21 @@ export default function DriverDashboard() {
     setAccepting(true);
     const reqId = incomingRequest.requestId || incomingRequest._id || 'active_trip';
 
+    const pLat = incomingRequest.pickupCoords?.lat;
+    const pLng = incomingRequest.pickupCoords?.lng;
+    const driverStartLat = typeof pLat === 'number' ? Number((pLat - 0.0075).toFixed(6)) : 23.8231;
+    const driverStartLng = typeof pLng === 'number' ? Number((pLng + 0.0085).toFixed(6)) : 90.4263;
+
     try {
-      // Roadmap Step 4: Driver accepts request via transaction
+      // Roadmap Step 4: Driver accepts request via transaction using local coordinates near patient
       await acceptAmbulanceRequest(reqId, {
         uid: 'driver_dha_4421',
         name: 'Assigned Driver (Md. Rahim)',
         phone: '01942809157',
         vehicleNumber: 'DHA-AMB-4421',
         rating: 4.9,
+        lat: driverStartLat,
+        lng: driverStartLng,
       });
 
       await driverAPI.updateBookingStatus(reqId, 'Accepted');

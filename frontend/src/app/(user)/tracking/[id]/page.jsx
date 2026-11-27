@@ -285,15 +285,26 @@ export default function TrackingPage() {
           }
         }
       } catch {
+        let localBooking = null;
+        try {
+          const raw = localStorage.getItem('last_emergency_booking');
+          if (raw) localBooking = JSON.parse(raw);
+        } catch {}
+
         const userGPS = await getUserCurrentLocation();
         const savedLoc = getSavedLastLocation();
-        const initialPt = userGPS || savedLoc || { lat: 23.8103, lng: 90.4125 };
-        const closestHosp = getNearbyHospitals(initialPt.lat, initialPt.lng, savedLoc?.label || '', 1)[0];
+        const initialPt = (localBooking?.pickupLat && localBooking?.pickupLng)
+          ? { lat: Number(localBooking.pickupLat), lng: Number(localBooking.pickupLng) }
+          : (userGPS || savedLoc || { lat: 23.8103, lng: 90.4125 });
+
+        const closestHosp = getNearbyHospitals(initialPt.lat, initialPt.lng, localBooking?.pickupAddress || savedLoc?.label || '', 1)[0];
         const fallbackBooking = {
-          id: id || 'active_trip',
+          id: id || localBooking?.id || 'active_trip',
           status: 'En Route',
-          pickupAddress: savedLoc?.label || 'Your Current Location',
-          destination: closestHosp?.name || 'Nearest Emergency Hospital',
+          pickupAddress: localBooking?.pickupAddress || savedLoc?.label || 'Your Current Location',
+          destination: localBooking?.destination || closestHosp?.name || 'Nearest Emergency Hospital',
+          patientName: localBooking?.patientName,
+          emergencyType: localBooking?.emergencyType,
           driver: {
             name: 'Assigned Driver',
             phone: '01942809157',
@@ -303,7 +314,9 @@ export default function TrackingPage() {
         };
         setBooking(fallbackBooking);
         setPatientPos({ lat: initialPt.lat, lng: initialPt.lng });
-        if (savedLoc?.label) setPickupAddress(savedLoc.label);
+        if (localBooking?.pickupAddress || savedLoc?.label) {
+          setPickupAddress(localBooking?.pickupAddress || savedLoc?.label);
+        }
         reverseGeocodePickup(initialPt.lat, initialPt.lng);
       } finally {
         setLoading(false);
@@ -638,19 +651,21 @@ export default function TrackingPage() {
   // Switch to Phase 2: Heading to Hospital
   const proceedToHospital = (hospital = selectedHospital) => {
     pauseLiveMovement();
+    hasExplicitHospitalRef.current = true;
     setTripPhase('hospital');
     setSelectedHospital(hospital);
     setBooking((prev) => ({ ...prev, status: 'Heading to Hospital', destination: hospital.name }));
 
     // Driver starts from patient position
-    const startPt = driverPos || patientPos || { lat: 23.8282, lng: 90.4163 };
+    const startPt = driverPos || patientPos || { lat: 23.8103, lng: 90.4125 };
     setDriverPos(startPt);
     lastRouteTargetRef.current = `hosp_${hospital.id}`;
     fetchRoadRoute(startPt, { lat: hospital.lat, lng: hospital.lng });
 
     // Update Firebase RTDB destination and ambulance status
-    updateDestinationHospital('active_trip', hospital);
-    updateAmbulanceLocation('active_trip', {
+    const tripKey = id || 'active_trip';
+    updateDestinationHospital(tripKey, hospital);
+    updateAmbulanceLocation(tripKey, {
       lat: startPt.lat,
       lng: startPt.lng,
       speed: 40,

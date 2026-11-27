@@ -335,6 +335,11 @@ export default function RequestPage() {
     if (!validate()) return;
     setLoading(true);
 
+    const targetHospital = matchedHospital || nearbyHospitals[0] || null;
+    const destName = form.destination || targetHospital?.name || 'Nearest General Hospital';
+    const destLat = targetHospital?.lat || pickupCoords.lat + 0.008;
+    const destLng = targetHospital?.lng || pickupCoords.lng + 0.008;
+
     const payload = {
       pickupLocation: {
         address: form.pickupLocation,
@@ -342,7 +347,9 @@ export default function RequestPage() {
         lng: pickupCoords.lng,
       },
       destinationLocation: {
-        address: form.destination || 'Nearest General Hospital',
+        address: destName,
+        lat: destLat,
+        lng: destLng,
       },
       patientName: form.patientName,
       emergencyType: form.emergencyType,
@@ -355,11 +362,27 @@ export default function RequestPage() {
         lat: pickupCoords.lat,
         lng: pickupCoords.lng,
         label: form.pickupLocation,
+        source: 'manual-pin',
       }));
     } catch {}
 
     const id = 'req_' + Date.now();
     setBookingId(id);
+
+    try {
+      localStorage.setItem('last_emergency_booking', JSON.stringify({
+        id,
+        pickupLat: pickupCoords.lat,
+        pickupLng: pickupCoords.lng,
+        pickupAddress: form.pickupLocation,
+        destination: destName,
+        destinationLat: destLat,
+        destinationLng: destLng,
+        patientName: form.patientName,
+        emergencyType: form.emergencyType,
+        ambulanceType: form.ambulanceType,
+      }));
+    } catch {}
 
     try {
       // 1. Firebase write — non-blocking with 4s timeout so it never hangs the form
@@ -371,16 +394,11 @@ export default function RequestPage() {
           lng: pickupCoords.lng,
           address: form.pickupLocation,
         },
-        destination: matchedHospital ? {
-          name: matchedHospital.name,
-          lat: matchedHospital.lat || 23.8188,
-          lng: matchedHospital.lng || 90.4074,
-          hotline: matchedHospital.hotline || '',
-        } : {
-          name: form.destination || 'Nearest General Hospital (Auto-Triage)',
-          lat: 23.8188,
-          lng: 90.4074,
-          hotline: '',
+        destination: {
+          name: destName,
+          lat: destLat,
+          lng: destLng,
+          hotline: targetHospital?.hotline || '',
         },
         patientDetails: {
           name: form.patientName,
