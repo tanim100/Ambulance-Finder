@@ -316,14 +316,22 @@ export default function LandingPage() {
           </h1>
 
           {/* CTAs */}
-          <div className="pt-3 flex flex-col sm:flex-row items-center justify-center gap-4">
+          <div className="pt-3 flex flex-col sm:flex-row flex-wrap items-center justify-center gap-3.5">
             <Link
-              href="/request"
-              className="w-full sm:w-auto flex items-center justify-center gap-3 bg-rose-600 hover:bg-rose-700 text-white font-extrabold text-base px-9 py-4 rounded-2xl shadow-xl shadow-rose-600/30 hover:shadow-2xl hover:shadow-rose-600/40 hover:-translate-y-0.5 active:translate-y-0 transition-all"
+              href="/request?mode=emergency"
+              className="w-full sm:w-auto flex items-center justify-center gap-2.5 bg-rose-600 hover:bg-rose-700 text-white font-extrabold text-base px-8 py-4 rounded-2xl shadow-xl shadow-rose-600/30 hover:shadow-2xl hover:shadow-rose-600/40 hover:-translate-y-0.5 active:translate-y-0 transition-all"
             >
               <Siren size={20} className="animate-pulse" />
-              <span>Request Emergency Ambulance</span>
+              <span>Emergency SOS</span>
               <ArrowRight size={18} />
+            </Link>
+
+            <Link
+              href="/request?mode=general"
+              className="w-full sm:w-auto flex items-center justify-center gap-2.5 bg-blue-600 hover:bg-blue-700 text-white font-bold text-base px-7 py-4 rounded-2xl shadow-lg shadow-blue-600/20 hover:-translate-y-0.5 active:translate-y-0 transition-all"
+            >
+              <Hospital size={19} />
+              <span>General Transfer</span>
             </Link>
 
             <Link
