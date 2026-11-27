@@ -31,7 +31,7 @@ const types = [
     label: 'ICU',
     emoji: '🏥',
     desc: 'Mobile ICU unit',
-    price: 'BDT 4,500',
+    price: 'BDT 4,000',
     features: ['ICU equipment', 'Doctor onboard', 'Ventilator'],
     color: 'border-red-200 bg-red-50',
     selectedColor: 'border-red-500 bg-red-100 ring-2 ring-red-300',
