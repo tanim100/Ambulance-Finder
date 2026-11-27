@@ -11,7 +11,7 @@ import Input from '@/components/ui/Input';
 import Select from '@/components/ui/Select';
 import Textarea from '@/components/ui/Textarea';
 import Button from '@/components/ui/Button';
-import AmbulanceTypeSelector from '@/components/ambulance/AmbulanceTypeSelector';
+import AmbulanceTypeSelector, { getEstimatedFare } from '@/components/ambulance/AmbulanceTypeSelector';
 import { bookingAPI } from '@/lib/api';
 import { useGeolocation } from '@/hooks/useGeolocation';
 import { updatePatientLocation, createAmbulanceRequest } from '@/lib/firebaseTracking';
@@ -91,6 +91,21 @@ export default function RequestPage() {
   const nearbyAmbulances = useMemo(() => {
     return generateNearbyAmbulances(pickupCoords.lat, pickupCoords.lng, form.pickupLocation);
   }, [pickupCoords.lat, pickupCoords.lng, form.pickupLocation]);
+
+  const nearbyCounts = useMemo(() => {
+    const avail = nearbyAmbulances.filter((a) => a.status === 'Available');
+    return {
+      Basic: avail.filter((a) => a.type === 'Basic').length || 1,
+      Advanced: avail.filter((a) => a.type === 'Advanced').length || 1,
+      ICU: avail.filter((a) => a.type === 'ICU').length || 1,
+      totalAvailable: avail.length,
+    };
+  }, [nearbyAmbulances]);
+
+  const estimatedFare = useMemo(
+    () => getEstimatedFare(form.ambulanceType, requestMode),
+    [form.ambulanceType, requestMode]
+  );
 
   const [showMapPicker, setShowMapPicker] = useState(false);
   const [showAreaDropdown, setShowAreaDropdown] = useState(false);
@@ -378,6 +393,8 @@ export default function RequestPage() {
       patientName: form.patientName,
       emergencyType: form.emergencyType || (requestMode === 'general' ? 'general' : 'accident'),
       requestMode,
+      priorityLevel: requestMode === 'emergency' ? 'critical' : 'standard',
+      estimatedFare,
       scheduledTime: requestMode === 'general' && scheduleOption === 'scheduled' ? scheduledTime : null,
       notes: form.notes,
       ambulanceType: form.ambulanceType,
@@ -431,6 +448,8 @@ export default function RequestPage() {
           phone: form.phone || '+880 1700-000000',
           emergencyType: form.emergencyType || (requestMode === 'general' ? 'general' : 'accident'),
           requestMode,
+          priorityLevel: requestMode === 'emergency' ? 'critical' : 'standard',
+          estimatedFare,
           scheduledTime: requestMode === 'general' && scheduleOption === 'scheduled' ? scheduledTime : null,
           ambulanceType: form.ambulanceType,
           notes: form.notes,
@@ -1126,9 +1145,16 @@ export default function RequestPage() {
 
           {/* Ambulance selector */}
           <div className="bg-white rounded-2xl border border-gray-100 p-4 space-y-3">
-            <h2 className="font-bold text-gray-800 text-sm">Ambulance Category</h2>
+            <div className="flex items-center justify-between">
+              <h2 className="font-bold text-gray-800 text-sm">Ambulance Category</h2>
+              <span className="text-[11px] font-bold text-emerald-700 bg-emerald-50 px-2.5 py-0.5 rounded-full border border-emerald-200">
+                🟢 {nearbyCounts.totalAvailable} Units Ready Near You
+              </span>
+            </div>
             <AmbulanceTypeSelector
               selected={form.ambulanceType}
+              requestMode={requestMode}
+              nearbyCounts={nearbyCounts}
               onChange={(val) => {
                 setForm((p) => ({ ...p, ambulanceType: val }));
                 if (errors.ambulanceType) setErrors((p) => ({ ...p, ambulanceType: '' }));
@@ -1153,6 +1179,34 @@ export default function RequestPage() {
             />
           </div>
 
+          {/* Estimated Fare & Response Summary */}
+          <div className={`rounded-2xl p-4 border flex items-center justify-between ${
+            requestMode === 'emergency'
+              ? 'bg-red-50/80 border-red-200'
+              : 'bg-blue-50/80 border-blue-200'
+          }`}>
+            <div>
+              <p className="text-xs font-semibold text-gray-600">
+                {requestMode === 'emergency' ? '⚡ Priority Emergency Dispatch' : '🏥 Standard General Transfer'}
+              </p>
+              <p className={`text-xs font-bold mt-0.5 ${
+                requestMode === 'emergency' ? 'text-red-700' : 'text-blue-700'
+              }`}>
+                {requestMode === 'emergency'
+                  ? `Fastest Response: 3–5 min • ${nearbyCounts.totalAvailable} nearby ambulances ready`
+                  : `Standard Response: 12–18 min • ${nearbyCounts.totalAvailable} nearby ambulances ready`}
+              </p>
+            </div>
+            <div className="text-right shrink-0">
+              <span className="text-[10px] text-gray-500 block font-semibold uppercase">Estimated Fare</span>
+              <span className={`text-lg font-black ${
+                requestMode === 'emergency' ? 'text-red-700' : 'text-blue-700'
+              }`}>
+                BDT {estimatedFare.toLocaleString()}
+              </span>
+            </div>
+          </div>
+
           {/* Submit */}
           <Button
             type="submit"
@@ -1166,8 +1220,8 @@ export default function RequestPage() {
             }`}
           >
             {requestMode === 'emergency'
-              ? '🚨 Dispatch Emergency Ambulance Now'
-              : '🏥 Book General Ambulance'}
+              ? `🚨 Dispatch Emergency Ambulance Now (BDT ${estimatedFare.toLocaleString()})`
+              : `🏥 Book General Ambulance (BDT ${estimatedFare.toLocaleString()})`}
           </Button>
         </form>
       </div>

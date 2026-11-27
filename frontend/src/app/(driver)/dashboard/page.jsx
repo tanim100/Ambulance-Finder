@@ -59,6 +59,7 @@ export default function DriverDashboard() {
           patientName: topReq.patientDetails?.name || 'Emergency Patient',
           emergencyType: topReq.patientDetails?.emergencyType || 'General Emergency',
           requestMode: topReq.patientDetails?.requestMode || (topReq.patientDetails?.emergencyType === 'general' ? 'general' : 'emergency'),
+          estimatedFare: topReq.patientDetails?.estimatedFare || null,
           scheduledTime: topReq.patientDetails?.scheduledTime || null,
           pickupLocation: topReq.pickup?.address || 'Current Patient Location',
           pickupCoords: { lat: topReq.pickup?.lat || 23.8282, lng: topReq.pickup?.lng || 90.4163 },
