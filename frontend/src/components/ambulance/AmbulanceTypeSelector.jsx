@@ -20,7 +20,7 @@ const types = [
     label: 'Advanced',
     emoji: '🚨',
     desc: 'Advanced life support',
-    price: 'BDT 1,000',
+    price: 'BDT 1,500',
     features: ['ALS equipment', 'Paramedic', 'Cardiac monitor'],
     color: 'border-orange-200 bg-orange-50',
     selectedColor: 'border-orange-500 bg-orange-100 ring-2 ring-orange-300',
