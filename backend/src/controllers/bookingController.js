@@ -174,7 +174,7 @@ const getBookingById = async (req, res, next) => {
 
     // Authorization check: User can only view their own booking, Driver can only view assigned or unassigned pending, Admin has full access
     if (req.user.role === 'user') {
-      if (booking.userId !== req.user.id) {
+      if (String(booking.userId) !== String(req.user.id)) {
         return res.status(403).json({
           success: false,
           message: 'Access denied. You are not authorized to view this booking.',
@@ -183,8 +183,8 @@ const getBookingById = async (req, res, next) => {
       }
     } else if (req.user.role === 'driver') {
       const driver = await Driver.findOne({ where: { userId: req.user.id } });
-      const isAssigned = driver && booking.driverId === driver.id;
-      const isPendingUnassigned = !booking.driverId && booking.status === 'pending';
+      const isAssigned = driver && booking.driverId && String(booking.driverId) === String(driver.id);
+      const isPendingUnassigned = !booking.driverId && (booking.status || '').toLowerCase() === 'pending';
       if (!isAssigned && !isPendingUnassigned) {
         return res.status(403).json({
           success: false,
@@ -238,7 +238,7 @@ const updateBookingStatus = async (req, res, next) => {
         });
       }
 
-      if (booking.driverId && booking.driverId !== driver.id) {
+      if (booking.driverId && String(booking.driverId) !== String(driver.id)) {
         return res.status(403).json({
           success: false,
           message: 'Access denied. You are not assigned to this booking.',
@@ -323,7 +323,7 @@ const cancelBooking = async (req, res, next) => {
 
     // Authorization check: Only booking owner (user), assigned driver, or admin can cancel
     if (req.user.role === 'user') {
-      if (booking.userId !== req.user.id) {
+      if (String(booking.userId) !== String(req.user.id)) {
         return res.status(403).json({
           success: false,
           message: 'Access denied. You are not authorized to cancel this booking.',
@@ -332,7 +332,7 @@ const cancelBooking = async (req, res, next) => {
       }
     } else if (req.user.role === 'driver') {
       const driver = await Driver.findOne({ where: { userId: req.user.id } });
-      if (!driver || (booking.driverId && booking.driverId !== driver.id)) {
+      if (!driver || !booking.driverId || String(booking.driverId) !== String(driver.id)) {
         return res.status(403).json({
           success: false,
           message: 'Access denied. You are not assigned to this booking.',
@@ -347,7 +347,16 @@ const cancelBooking = async (req, res, next) => {
       });
     }
 
-    if (!['pending', 'accepted'].includes(booking.status)) {
+    const currentStatus = (booking.status || '').toLowerCase();
+    if (currentStatus === 'cancelled') {
+      return res.status(200).json({
+        success: true,
+        message: 'Booking is already cancelled',
+        data: { booking },
+      });
+    }
+
+    if (!['pending', 'accepted', 'enroute'].includes(currentStatus)) {
       return res.status(400).json({
         success: false,
         message: `Cannot cancel a booking that is ${booking.status}`,
@@ -362,12 +371,16 @@ const cancelBooking = async (req, res, next) => {
       await Ambulance.update({ status: 'available' }, { where: { id: booking.ambulanceId } });
     }
 
-    // Emit real-time status update to booking room
+    // Emit real-time status update to booking room & global channel for drivers
     const io = req.app.get('io');
     if (io) {
       io.to(`booking-${booking.id}`).emit('booking:status', {
         bookingId: booking.id,
         status: 'cancelled',
+        updatedAt: new Date().toISOString(),
+      });
+      io.emit('booking:cancelled', {
+        bookingId: booking.id,
         updatedAt: new Date().toISOString(),
       });
     }

@@ -73,10 +73,10 @@ router.patch(
   updateBookingStatus
 );
 
-// DELETE /api/bookings/:id/cancel — cancel booking (user/driver/admin)
+// Cancel booking (user/driver/admin) — supports DELETE, PATCH, POST, PUT
 router.delete('/:id/cancel', protect, cancelBooking);
-
-// PATCH /api/bookings/:id/cancel — cancel booking (user/driver/admin)
 router.patch('/:id/cancel', protect, cancelBooking);
+router.post('/:id/cancel', protect, cancelBooking);
+router.put('/:id/cancel', protect, cancelBooking);
 
 module.exports = router;

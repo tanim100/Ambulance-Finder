@@ -1175,13 +1175,13 @@ export default function TrackingPage() {
           </div>
         </div>
 
-        {/* Cancel Button if pending */}
-        {booking?.status === 'Pending' && (
+        {/* Cancel Button if cancellable */}
+        {['pending', 'accepted', 'en route', 'enroute'].includes(booking?.status?.toLowerCase()) && (
           <div className="flex justify-center mt-2">
             <button
               onClick={handleCancel}
               disabled={cancelling}
-              className="text-xs font-bold text-rose-600 hover:text-rose-700 border border-rose-300 hover:bg-rose-50 py-2 px-6 rounded-xl transition-all"
+              className="text-xs font-bold text-rose-600 hover:text-rose-700 border border-rose-300 hover:bg-rose-50 py-2 px-6 rounded-xl transition-all disabled:opacity-50"
             >
               {cancelling ? 'Cancelling…' : '✕ Cancel Request'}
             </button>
