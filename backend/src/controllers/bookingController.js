@@ -2,6 +2,24 @@ const { sequelize, Booking, Ambulance, Driver, User } = require('../models');
 const { Op } = require('sequelize');
 
 /**
+ * Finite State Machine for valid booking status transitions:
+ * - pending:   -> accepted, cancelled
+ * - accepted:  -> enroute, cancelled
+ * - enroute:   -> arrived, completed, cancelled
+ * - arrived:   -> enroute (heading to hospital ER), completed, cancelled
+ * - completed: -> terminal state (immutable)
+ * - cancelled: -> terminal state (immutable)
+ */
+const VALID_STATUS_TRANSITIONS = {
+  pending: ['accepted', 'cancelled'],
+  accepted: ['enroute', 'cancelled'],
+  enroute: ['arrived', 'completed', 'cancelled'],
+  arrived: ['enroute', 'completed', 'cancelled'],
+  completed: [],
+  cancelled: [],
+};
+
+/**
  * POST /api/bookings
  * Create a new booking (user) with concurrency control & double-booking prevention
  */
@@ -372,15 +390,30 @@ const updateBookingStatus = async (req, res, next) => {
       });
     }
 
-    // Check if booking is already in a terminal state
-    const currentStatus = (booking.status || '').toLowerCase();
+    // State Transition Validation
+    const currentStatus = (booking.status || 'pending').toLowerCase();
+
+    // 1. Terminal state check: completed or cancelled bookings cannot be altered
     if (['completed', 'cancelled'].includes(currentStatus)) {
       await transaction.rollback();
       return res.status(400).json({
         success: false,
-        message: `Cannot update status of a booking that is already ${booking.status}.`,
+        message: `Cannot update status of a booking that is already ${booking.status}. Completed or cancelled bookings are immutable.`,
         data: null,
       });
+    }
+
+    // 2. FSM state transition validity: disallow invalid or backwards jumps
+    if (normalizedStatus && normalizedStatus !== currentStatus) {
+      const allowedNext = VALID_STATUS_TRANSITIONS[currentStatus] || [];
+      if (!allowedNext.includes(normalizedStatus)) {
+        await transaction.rollback();
+        return res.status(400).json({
+          success: false,
+          message: `Invalid booking status transition from '${booking.status}' to '${status}'. Allowed transitions: ${allowedNext.length ? allowedNext.join(', ') : 'none (terminal state)'}.`,
+          data: null,
+        });
+      }
     }
 
     if (normalizedStatus) booking.status = normalizedStatus;
@@ -494,11 +527,11 @@ const cancelBooking = async (req, res, next) => {
       });
     }
 
-    if (!['pending', 'accepted', 'enroute'].includes(currentStatus)) {
+    if (!VALID_STATUS_TRANSITIONS[currentStatus]?.includes('cancelled')) {
       await transaction.rollback();
       return res.status(400).json({
         success: false,
-        message: `Cannot cancel a booking that is ${booking.status}`,
+        message: `Cannot cancel a booking that is already ${booking.status}. Only bookings in pending, accepted, or enroute states can be cancelled.`,
         data: null,
       });
     }
