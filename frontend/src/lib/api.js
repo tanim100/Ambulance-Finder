@@ -102,7 +102,7 @@ export const driverAPI = {
   toggleOnline: (status) => api.patch('/driver/status', { isOnline: status }),
   getActiveBooking: () => api.get('/driver/active-booking'),
   updateBookingStatus: (id, status) =>
-    api.patch(`/driver/booking/${id}/status`, { status }),
+    api.patch(`/bookings/${id}/status`, { status }),
 };
 
 // Admin endpoints

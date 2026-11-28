@@ -8,6 +8,7 @@ const {
   updateDriverLocation,
   updateDriverStatus,
 } = require('../controllers/driverController');
+const { updateBookingStatus } = require('../controllers/bookingController');
 const { protect, requireAdmin, requireDriver } = require('../middleware/auth');
 
 const validate = (req, res, next) => {
@@ -54,7 +55,7 @@ router.put(
   updateDriverLocation
 );
 
-// PUT /api/drivers/:id/status — driver or admin
+// PUT & PATCH /api/drivers/:id/status — driver or admin
 router.put(
   '/:id/status',
   protect,
@@ -63,5 +64,17 @@ router.put(
   validate,
   updateDriverStatus
 );
+router.patch(
+  '/:id/status',
+  protect,
+  requireDriver,
+  [body('isOnline').isBoolean().withMessage('isOnline must be a boolean')],
+  validate,
+  updateDriverStatus
+);
+
+// PATCH /api/drivers/booking/:id/status & PUT /api/drivers/booking/:id/status
+router.patch('/booking/:id/status', protect, requireDriver, updateBookingStatus);
+router.put('/booking/:id/status', protect, requireDriver, updateBookingStatus);
 
 module.exports = router;

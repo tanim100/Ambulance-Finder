@@ -216,7 +216,7 @@ const getBookingById = async (req, res, next) => {
  */
 const updateBookingStatus = async (req, res, next) => {
   try {
-    const { status, estimatedTime, fare } = req.body;
+    let { status, estimatedTime, fare } = req.body;
 
     const booking = await Booking.findByPk(req.params.id);
     if (!booking) {
@@ -225,6 +225,18 @@ const updateBookingStatus = async (req, res, next) => {
         message: 'Booking not found',
         data: null,
       });
+    }
+
+    // Normalize incoming status
+    let normalizedStatus = status;
+    if (status) {
+      const raw = String(status).trim().toLowerCase();
+      if (raw === 'accepted') normalizedStatus = 'accepted';
+      else if (['enroute', 'en route', 'en-route', 'heading to hospital', 'headingtohospital'].includes(raw)) normalizedStatus = 'enroute';
+      else if (raw === 'arrived') normalizedStatus = 'arrived';
+      else if (raw === 'completed') normalizedStatus = 'completed';
+      else if (['cancelled', 'canceled'].includes(raw)) normalizedStatus = 'cancelled';
+      else if (raw === 'pending') normalizedStatus = 'pending';
     }
 
     // Authorization check: Only assigned driver or admin can update booking status
@@ -238,6 +250,7 @@ const updateBookingStatus = async (req, res, next) => {
         });
       }
 
+      // If the booking is already assigned to a DIFFERENT driver, deny access
       if (booking.driverId && String(booking.driverId) !== String(driver.id)) {
         return res.status(403).json({
           success: false,
@@ -246,13 +259,22 @@ const updateBookingStatus = async (req, res, next) => {
         });
       }
 
-      // If driver is accepting an unassigned booking, assign this driver
-      if (!booking.driverId && status === 'accepted') {
-        booking.driverId = driver.id;
-        const ambulance = await Ambulance.findOne({ where: { driverId: driver.id } });
-        if (ambulance) {
-          booking.ambulanceId = ambulance.id;
-          await ambulance.update({ status: 'busy' });
+      // If the booking is unassigned:
+      // A driver can only update status if they are accepting the booking
+      if (!booking.driverId) {
+        if (normalizedStatus === 'accepted') {
+          booking.driverId = driver.id;
+          const ambulance = await Ambulance.findOne({ where: { driverId: driver.id } });
+          if (ambulance) {
+            booking.ambulanceId = ambulance.id;
+            await ambulance.update({ status: 'busy' });
+          }
+        } else {
+          return res.status(403).json({
+            success: false,
+            message: 'Access denied. You must accept this booking before updating its status.',
+            data: null,
+          });
         }
       }
     } else if (req.user.role !== 'admin') {
@@ -263,19 +285,29 @@ const updateBookingStatus = async (req, res, next) => {
       });
     }
 
-    if (status) booking.status = status;
+    // Check if booking is already in a terminal state
+    const currentStatus = (booking.status || '').toLowerCase();
+    if (['completed', 'cancelled'].includes(currentStatus)) {
+      return res.status(400).json({
+        success: false,
+        message: `Cannot update status of a booking that is already ${booking.status}.`,
+        data: null,
+      });
+    }
+
+    if (normalizedStatus) booking.status = normalizedStatus;
     if (estimatedTime !== undefined) booking.estimatedTime = estimatedTime;
     if (fare !== undefined) booking.fare = fare;
 
     await booking.save();
 
     // Release ambulance on completed or cancelled
-    if (['completed', 'cancelled'].includes(status) && booking.ambulanceId) {
+    if (['completed', 'cancelled'].includes(normalizedStatus) && booking.ambulanceId) {
       await Ambulance.update({ status: 'available' }, { where: { id: booking.ambulanceId } });
     }
 
     // Increment driver trips on completed
-    if (status === 'completed' && booking.driverId) {
+    if (normalizedStatus === 'completed' && booking.driverId) {
       await Driver.increment('totalTrips', { by: 1, where: { id: booking.driverId } });
     }
 
@@ -299,7 +331,7 @@ const updateBookingStatus = async (req, res, next) => {
 
     return res.status(200).json({
       success: true,
-      message: `Booking status updated to ${status}`,
+      message: `Booking status updated to ${booking.status}`,
       data: { booking: updatedBooking },
     });
   } catch (error) {

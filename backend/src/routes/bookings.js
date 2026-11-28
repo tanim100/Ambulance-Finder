@@ -45,6 +45,14 @@ router.get('/', protect, getBookings);
 // GET /api/bookings/:id — get single booking
 router.get('/:id', protect, getBookingById);
 
+const statusSanitizer = (val) => {
+  if (!val) return val;
+  const s = String(val).trim().toLowerCase();
+  if (['enroute', 'en route', 'en-route', 'heading to hospital', 'headingtohospital'].includes(s)) return 'enroute';
+  if (['cancelled', 'canceled'].includes(s)) return 'cancelled';
+  return s;
+};
+
 // PUT /api/bookings/:id/status — update booking status (driver/admin)
 router.put(
   '/:id/status',
@@ -52,7 +60,8 @@ router.put(
   requireDriver,
   [
     body('status')
-      .isIn(['accepted', 'enroute', 'arrived', 'completed', 'cancelled'])
+      .customSanitizer(statusSanitizer)
+      .isIn(['pending', 'accepted', 'enroute', 'arrived', 'completed', 'cancelled'])
       .withMessage('Valid status is required'),
   ],
   validate,
@@ -66,7 +75,8 @@ router.patch(
   requireDriver,
   [
     body('status')
-      .isIn(['accepted', 'enroute', 'arrived', 'completed', 'cancelled'])
+      .customSanitizer(statusSanitizer)
+      .isIn(['pending', 'accepted', 'enroute', 'arrived', 'completed', 'cancelled'])
       .withMessage('Valid status is required'),
   ],
   validate,

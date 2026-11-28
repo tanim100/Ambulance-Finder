@@ -46,6 +46,7 @@ app.use('/api/auth', authRoutes);
 app.use('/api/ambulances', ambulanceRoutes);
 app.use('/api/bookings', bookingRoutes);
 app.use('/api/drivers', driverRoutes);
+app.use('/api/driver', driverRoutes);
 app.use('/api/admin', adminRoutes);
 
 // ─── 404 Handler ──────────────────────────────────────────────────────────────
