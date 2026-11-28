@@ -16,7 +16,7 @@ import {
   updateUserLiveLocation,
   completeOrCancelTrip,
 } from '@/lib/firebaseTracking';
-import { getNearbyHospitals, TOP_HOSPITALS } from '@/lib/hospitalData';
+import { getNearbyHospitals, TOP_HOSPITALS, fetchRealNearbyHospitals } from '@/lib/hospitalData';
 import { Play, Pause, RotateCcw, Navigation, CheckCircle2, Phone, Hospital, ChevronRight, AlertCircle } from 'lucide-react';
 
 // Leaflet map — no SSR
@@ -149,12 +149,24 @@ export default function TrackingPage() {
 
   // Trip Phase: 'pickup' (Driver -> Patient) or 'hospital' (Patient -> Hospital)
   const [tripPhase, setTripPhase] = useState('pickup');
-  const nearbyHospitals = useMemo(
-    () => getNearbyHospitals(patientPos?.lat ?? 23.8103, patientPos?.lng ?? 90.4125, pickupAddress, 5),
-    [patientPos?.lat, patientPos?.lng, pickupAddress]
-  );
+  const [osmHospitals, setOsmHospitals] = useState([]);
+  const nearbyHospitals = useMemo(() => {
+    if (osmHospitals.length > 0) return osmHospitals;
+    return getNearbyHospitals(patientPos?.lat ?? 23.8103, patientPos?.lng ?? 90.4125, pickupAddress, 10);
+  }, [osmHospitals, patientPos?.lat, patientPos?.lng, pickupAddress]);
   const [selectedHospital, setSelectedHospital] = useState(NEARBY_HOSPITALS[0]);
   const hasExplicitHospitalRef = useRef(false);
+
+  // Fetch real nearby OSM hospitals around patient location
+  useEffect(() => {
+    if (patientPos?.lat && patientPos?.lng) {
+      fetchRealNearbyHospitals(patientPos.lat, patientPos.lng, pickupAddress, 5000).then((list) => {
+        if (Array.isArray(list) && list.length > 0) {
+          setOsmHospitals(list);
+        }
+      });
+    }
+  }, [patientPos?.lat, patientPos?.lng, pickupAddress]);
 
   // Keep default destination hospital synced to the nearest hospital around user's actual location
   useEffect(() => {
@@ -1062,6 +1074,8 @@ export default function TrackingPage() {
             driverLat={mapCenter.driverLat}
             driverLng={mapCenter.driverLng}
             hospitalLocation={selectedHospital}
+            hospitals={nearbyHospitals}
+            onHospitalClick={proceedToHospital}
             route={roadRoute}
             phaseKey={`${tripPhase}-${selectedHospital.id}`}
             height="100%"

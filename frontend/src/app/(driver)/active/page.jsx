@@ -1,7 +1,7 @@
 'use client';
 // src/app/(driver)/active/page.jsx — Driver Active Console with Real Device GPS Streaming to Firebase
 
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import dynamic from 'next/dynamic';
 import { Phone, MapPin, ChevronLeft, ChevronUp, ChevronDown, Radio, Play, Pause, RefreshCw, Send, CheckCircle2, Navigation, Maximize2, Minimize2 } from 'lucide-react';
@@ -21,6 +21,7 @@ import {
   updateDriverLiveLocation,
   completeOrCancelTrip,
 } from '@/lib/firebaseTracking';
+import { getNearbyHospitals, fetchRealNearbyHospitals } from '@/lib/hospitalData';
 import { rtdb } from '@/lib/firebase';
 import { ref, onValue, off } from 'firebase/database';
 
@@ -65,7 +66,25 @@ export default function DriverActivePage() {
   const [completed, setCompleted] = useState(false);
   const [userLiveSyncedAt, setUserLiveSyncedAt] = useState(null);
   const [roadRoute, setRoadRoute] = useState(null);
+  const [driverNearbyHospitals, setDriverNearbyHospitals] = useState([]);
   const lastRouteKeyRef = useRef('');
+
+  // Compute and fetch all nearby hospitals around patient's location so driver can route to any of them on the map
+  const fallbackNearbyHospitals = useMemo(
+    () => getNearbyHospitals(trip.userLocation?.lat ?? 23.8103, trip.userLocation?.lng ?? 90.4125, trip.pickupLocation, 12),
+    [trip.userLocation?.lat, trip.userLocation?.lng, trip.pickupLocation]
+  );
+  const allMapHospitals = driverNearbyHospitals.length > 0 ? driverNearbyHospitals : fallbackNearbyHospitals;
+
+  useEffect(() => {
+    if (trip.userLocation?.lat && trip.userLocation?.lng) {
+      fetchRealNearbyHospitals(trip.userLocation.lat, trip.userLocation.lng, trip.pickupLocation, 5000).then((list) => {
+        if (Array.isArray(list) && list.length > 0) {
+          setDriverNearbyHospitals(list);
+        }
+      });
+    }
+  }, [trip.userLocation?.lat, trip.userLocation?.lng, trip.pickupLocation]);
   const watchIdRef = useRef(null);
 
   // Hydrate accepted trip details from localStorage immediately so real patient & hospital show before Firebase resolves
@@ -665,6 +684,14 @@ export default function DriverActivePage() {
             userLocation={trip.userLocation}
             driverLocation={activeLoc}
             hospitalLocation={trip.destinationHospital ? { lat: trip.destinationHospital.lat, lng: trip.destinationHospital.lng, name: trip.destinationHospital.name } : null}
+            hospitals={allMapHospitals}
+            onHospitalClick={(h) => {
+              setTrip((prev) => ({
+                ...prev,
+                destination: h.name,
+                destinationHospital: { name: h.name, lat: h.lat, lng: h.lng, hotline: h.hotline || '' },
+              }));
+            }}
             phaseKey={trip.status}
             onLocationSelect={handleMapClick}
             route={

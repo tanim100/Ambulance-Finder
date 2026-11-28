@@ -12,7 +12,7 @@ import AmbulanceCard from '@/components/ambulance/AmbulanceCard';
 import { useGeolocation } from '@/hooks/useGeolocation';
 import { ambulanceAPI } from '@/lib/api';
 import { subscribeToAmbulanceLocation } from '@/lib/firebaseTracking';
-import { getNearbyHospitals } from '@/lib/hospitalData';
+import { getNearbyHospitals, fetchRealNearbyHospitals } from '@/lib/hospitalData';
 
 const MapView = dynamic(() => import('@/components/map/MapView'), {
   ssr: false,
@@ -37,11 +37,14 @@ export const generateNearbyAmbulances = (lat, lng, areaLabel = '') => {
   const userLng = typeof lng === 'number' ? lng : 90.4125;
 
   const baseUnits = [
-    { id: 'amb-1', num: 'AMB-001', type: 'Basic',    driver: 'Rahim Ahmed',  rating: 4.8, dLat:  0.0065, dLng: -0.0068 },
-    { id: 'amb-2', num: 'AMB-002', type: 'Advanced', driver: 'Karim Hossain', rating: 4.9, dLat: -0.0105, dLng:  0.0112 },
-    { id: 'amb-3', num: 'AMB-003', type: 'ICU',      driver: 'Jamal Uddin',  rating: 4.9, dLat:  0.0148, dLng:  0.0135 },
-    { id: 'amb-4', num: 'AMB-004', type: 'Basic',    driver: 'Sajid Mia',    rating: 4.7, dLat: -0.0185, dLng: -0.0165 },
-    { id: 'amb-5', num: 'AMB-005', type: 'Advanced', driver: 'Tanvir Hasan', rating: 4.8, dLat:  0.0225, dLng: -0.0210 },
+    { id: 'amb-1', num: 'AMB-001', type: 'Basic',    driver: 'Rahim Ahmed',   rating: 4.8, dLat:  0.0052, dLng: -0.0054 },
+    { id: 'amb-2', num: 'AMB-002', type: 'Advanced', driver: 'Karim Hossain', rating: 4.9, dLat: -0.0085, dLng:  0.0092 },
+    { id: 'amb-3', num: 'AMB-003', type: 'ICU',      driver: 'Jamal Uddin',   rating: 4.9, dLat:  0.0128, dLng:  0.0115 },
+    { id: 'amb-4', num: 'AMB-004', type: 'Basic',    driver: 'Sajid Mia',     rating: 4.7, dLat: -0.0155, dLng: -0.0135 },
+    { id: 'amb-5', num: 'AMB-005', type: 'Advanced', driver: 'Tanvir Hasan',  rating: 4.8, dLat:  0.0195, dLng: -0.0175 },
+    { id: 'amb-6', num: 'AMB-006', type: 'ICU',      driver: 'Nayeem Islam',  rating: 4.9, dLat: -0.0042, dLng: -0.0088 },
+    { id: 'amb-7', num: 'AMB-007', type: 'Basic',    driver: 'Shakil Khan',   rating: 4.8, dLat:  0.0098, dLng: -0.0122 },
+    { id: 'amb-8', num: 'AMB-008', type: 'Advanced', driver: 'Mehedi Hasan',  rating: 4.9, dLat: -0.0210, dLng:  0.0185 },
   ];
 
   return baseUnits.map((u, idx) => {
@@ -163,13 +166,16 @@ export default function HomePage() {
     }
   }, [location]);
 
-  // Auto-center map & regenerate fleet around active user location
+  // Auto-center map & regenerate fleet + real OSM hospitals around active user location
   useEffect(() => {
     if (location && typeof location.lat === 'number' && typeof location.lng === 'number') {
       setMapCenter([location.lat, location.lng]);
       setAmbulances(generateNearbyAmbulances(location.lat, location.lng, location.label));
       setHospitals(getNearbyHospitals(location.lat, location.lng, location.label));
       fetchNearby();
+      fetchRealNearbyHospitals(location.lat, location.lng, location.label).then((list) => {
+        if (Array.isArray(list) && list.length > 0) setHospitals(list);
+      });
     }
   }, [location, fetchNearby]);
 

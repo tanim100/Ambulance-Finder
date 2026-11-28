@@ -21,6 +21,8 @@ export default function MapComponent({
   driverLat,
   driverLng,
   hospitalLocation = null,
+  hospitals = [],
+  onHospitalClick = null,
   route: customRoute = null,
   phaseKey = '',
   height = '100%',
@@ -71,6 +73,8 @@ export default function MapComponent({
       userLocation={userLocation}
       driverLocation={driverLocation}
       hospitalLocation={hospitalLocation}
+      hospitals={hospitals}
+      onHospitalClick={onHospitalClick}
       ambulances={[]}
       route={route}
       phaseKey={phaseKey}
