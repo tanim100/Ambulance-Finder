@@ -1,10 +1,12 @@
-const { Booking, Ambulance, Driver, User } = require('../models');
+const { sequelize, Booking, Ambulance, Driver, User } = require('../models');
+const { Op } = require('sequelize');
 
 /**
  * POST /api/bookings
- * Create a new booking (user)
+ * Create a new booking (user) with concurrency control & double-booking prevention
  */
 const createBooking = async (req, res, next) => {
+  const transaction = await sequelize.transaction();
   try {
     const {
       pickupLocation,
@@ -19,15 +21,48 @@ const createBooking = async (req, res, next) => {
     let driverId = null;
 
     if (ambulanceId) {
+      // Pessimistic row-level lock (SELECT ... FOR UPDATE) to prevent race conditions
       ambulance = await Ambulance.findOne({
-        where: { id: ambulanceId, status: 'available' },
+        where: { id: ambulanceId },
         include: [{ model: Driver, as: 'driver' }],
+        lock: transaction.LOCK.UPDATE,
+        transaction,
       });
 
       if (!ambulance) {
-        return res.status(400).json({
+        await transaction.rollback();
+        return res.status(404).json({
           success: false,
-          message: 'Requested ambulance is not available',
+          message: 'Requested ambulance not found',
+          data: null,
+        });
+      }
+
+      if (ambulance.status !== 'available') {
+        await transaction.rollback();
+        return res.status(409).json({
+          success: false,
+          message: 'Requested ambulance is currently busy or already booked. Please choose another ambulance.',
+          data: null,
+        });
+      }
+
+      // Concurrency check: Ensure no other active trip exists for this ambulance
+      const activeTrip = await Booking.findOne({
+        where: {
+          ambulanceId: ambulance.id,
+          status: { [Op.in]: ['pending', 'accepted', 'enroute', 'arrived'] },
+        },
+        lock: transaction.LOCK.UPDATE,
+        transaction,
+      });
+
+      if (activeTrip) {
+        await ambulance.update({ status: 'busy' }, { transaction });
+        await transaction.rollback();
+        return res.status(409).json({
+          success: false,
+          message: 'Requested ambulance is already assigned to an ongoing emergency trip.',
           data: null,
         });
       }
@@ -35,27 +70,31 @@ const createBooking = async (req, res, next) => {
       if (ambulance.driver) {
         driverId = ambulance.driver.id;
       }
+
+      // Atomically mark ambulance as busy within transaction
+      await ambulance.update({ status: 'busy' }, { transaction });
     }
 
-    const booking = await Booking.create({
-      userId: req.user.id,
-      ambulanceId: ambulance ? ambulance.id : null,
-      driverId: driverId || null,
-      pickupAddress: pickupLocation ? pickupLocation.address : 'Emergency Location',
-      pickupLat: pickupLocation ? pickupLocation.lat : 0,
-      pickupLng: pickupLocation ? pickupLocation.lng : 0,
-      destinationAddress: destinationLocation ? destinationLocation.address : null,
-      destinationLat: destinationLocation ? destinationLocation.lat : null,
-      destinationLng: destinationLocation ? destinationLocation.lng : null,
-      patientName,
-      emergencyType,
-      notes,
-      fare: 50.0, // Base emergency dispatch fare
-    });
+    const booking = await Booking.create(
+      {
+        userId: req.user.id,
+        ambulanceId: ambulance ? ambulance.id : null,
+        driverId: driverId || null,
+        pickupAddress: pickupLocation ? pickupLocation.address : 'Emergency Location',
+        pickupLat: pickupLocation ? pickupLocation.lat : 0,
+        pickupLng: pickupLocation ? pickupLocation.lng : 0,
+        destinationAddress: destinationLocation ? destinationLocation.address : null,
+        destinationLat: destinationLocation ? destinationLocation.lat : null,
+        destinationLng: destinationLocation ? destinationLocation.lng : null,
+        patientName,
+        emergencyType,
+        notes,
+        fare: 50.0, // Base emergency dispatch fare
+      },
+      { transaction }
+    );
 
-    if (ambulance) {
-      await ambulance.update({ status: 'busy' });
-    }
+    await transaction.commit();
 
     const fullBooking = await Booking.findByPk(booking.id, {
       include: [
@@ -82,6 +121,9 @@ const createBooking = async (req, res, next) => {
       data: { booking: fullBooking },
     });
   } catch (error) {
+    if (transaction && !transaction.finished) {
+      await transaction.rollback();
+    }
     next(error);
   }
 };
@@ -212,14 +254,20 @@ const getBookingById = async (req, res, next) => {
 
 /**
  * PUT /api/bookings/:id/status
- * Update booking status
+ * Update booking status with concurrency control against race conditions
  */
 const updateBookingStatus = async (req, res, next) => {
+  const transaction = await sequelize.transaction();
   try {
     let { status, estimatedTime, fare } = req.body;
 
-    const booking = await Booking.findByPk(req.params.id);
+    const booking = await Booking.findByPk(req.params.id, {
+      lock: transaction.LOCK.UPDATE,
+      transaction,
+    });
+
     if (!booking) {
+      await transaction.rollback();
       return res.status(404).json({
         success: false,
         message: 'Booking not found',
@@ -241,8 +289,9 @@ const updateBookingStatus = async (req, res, next) => {
 
     // Authorization check: Only assigned driver or admin can update booking status
     if (req.user.role === 'driver') {
-      const driver = await Driver.findOne({ where: { userId: req.user.id } });
+      const driver = await Driver.findOne({ where: { userId: req.user.id }, transaction });
       if (!driver) {
+        await transaction.rollback();
         return res.status(403).json({
           success: false,
           message: 'Access denied. Driver profile not found.',
@@ -252,6 +301,7 @@ const updateBookingStatus = async (req, res, next) => {
 
       // If the booking is already assigned to a DIFFERENT driver, deny access
       if (booking.driverId && String(booking.driverId) !== String(driver.id)) {
+        await transaction.rollback();
         return res.status(403).json({
           success: false,
           message: 'Access denied. You are not assigned to this booking.',
@@ -263,13 +313,49 @@ const updateBookingStatus = async (req, res, next) => {
       // A driver can only update status if they are accepting the booking
       if (!booking.driverId) {
         if (normalizedStatus === 'accepted') {
-          booking.driverId = driver.id;
-          const ambulance = await Ambulance.findOne({ where: { driverId: driver.id } });
-          if (ambulance) {
-            booking.ambulanceId = ambulance.id;
-            await ambulance.update({ status: 'busy' });
+          // RACE CONDITION CHECK: Ensure booking is still pending and has not been accepted by another driver
+          if (booking.status !== 'pending') {
+            await transaction.rollback();
+            return res.status(409).json({
+              success: false,
+              message: 'This booking has already been accepted by another driver or is no longer available.',
+              data: null,
+            });
           }
+
+          // RACE CONDITION CHECK: Ensure driver's ambulance is not already busy or double-booked
+          const ambulance = await Ambulance.findOne({
+            where: { driverId: driver.id },
+            lock: transaction.LOCK.UPDATE,
+            transaction,
+          });
+
+          if (ambulance) {
+            const activeTrip = await Booking.findOne({
+              where: {
+                ambulanceId: ambulance.id,
+                status: { [Op.in]: ['accepted', 'enroute', 'arrived'] },
+                id: { [Op.ne]: booking.id },
+              },
+              transaction,
+            });
+
+            if (activeTrip || ambulance.status === 'busy') {
+              await transaction.rollback();
+              return res.status(409).json({
+                success: false,
+                message: 'Your ambulance is already on an active trip. Complete your current trip before accepting another.',
+                data: null,
+              });
+            }
+
+            booking.ambulanceId = ambulance.id;
+            await ambulance.update({ status: 'busy' }, { transaction });
+          }
+
+          booking.driverId = driver.id;
         } else {
+          await transaction.rollback();
           return res.status(403).json({
             success: false,
             message: 'Access denied. You must accept this booking before updating its status.',
@@ -278,6 +364,7 @@ const updateBookingStatus = async (req, res, next) => {
         }
       }
     } else if (req.user.role !== 'admin') {
+      await transaction.rollback();
       return res.status(403).json({
         success: false,
         message: 'Access denied. Driver or Admin privileges required.',
@@ -288,6 +375,7 @@ const updateBookingStatus = async (req, res, next) => {
     // Check if booking is already in a terminal state
     const currentStatus = (booking.status || '').toLowerCase();
     if (['completed', 'cancelled'].includes(currentStatus)) {
+      await transaction.rollback();
       return res.status(400).json({
         success: false,
         message: `Cannot update status of a booking that is already ${booking.status}.`,
@@ -299,17 +387,22 @@ const updateBookingStatus = async (req, res, next) => {
     if (estimatedTime !== undefined) booking.estimatedTime = estimatedTime;
     if (fare !== undefined) booking.fare = fare;
 
-    await booking.save();
+    await booking.save({ transaction });
 
     // Release ambulance on completed or cancelled
     if (['completed', 'cancelled'].includes(normalizedStatus) && booking.ambulanceId) {
-      await Ambulance.update({ status: 'available' }, { where: { id: booking.ambulanceId } });
+      await Ambulance.update(
+        { status: 'available' },
+        { where: { id: booking.ambulanceId }, transaction }
+      );
     }
 
     // Increment driver trips on completed
     if (normalizedStatus === 'completed' && booking.driverId) {
-      await Driver.increment('totalTrips', { by: 1, where: { id: booking.driverId } });
+      await Driver.increment('totalTrips', { by: 1, where: { id: booking.driverId }, transaction });
     }
+
+    await transaction.commit();
 
     const updatedBooking = await Booking.findByPk(booking.id, {
       include: [
@@ -335,6 +428,9 @@ const updateBookingStatus = async (req, res, next) => {
       data: { booking: updatedBooking },
     });
   } catch (error) {
+    if (transaction && !transaction.finished) {
+      await transaction.rollback();
+    }
     next(error);
   }
 };
@@ -343,9 +439,15 @@ const updateBookingStatus = async (req, res, next) => {
  * DELETE /api/bookings/:id/cancel
  */
 const cancelBooking = async (req, res, next) => {
+  const transaction = await sequelize.transaction();
   try {
-    const booking = await Booking.findByPk(req.params.id);
+    const booking = await Booking.findByPk(req.params.id, {
+      lock: transaction.LOCK.UPDATE,
+      transaction,
+    });
+
     if (!booking) {
+      await transaction.rollback();
       return res.status(404).json({
         success: false,
         message: 'Booking not found',
@@ -356,6 +458,7 @@ const cancelBooking = async (req, res, next) => {
     // Authorization check: Only booking owner (user), assigned driver, or admin can cancel
     if (req.user.role === 'user') {
       if (String(booking.userId) !== String(req.user.id)) {
+        await transaction.rollback();
         return res.status(403).json({
           success: false,
           message: 'Access denied. You are not authorized to cancel this booking.',
@@ -363,8 +466,9 @@ const cancelBooking = async (req, res, next) => {
         });
       }
     } else if (req.user.role === 'driver') {
-      const driver = await Driver.findOne({ where: { userId: req.user.id } });
+      const driver = await Driver.findOne({ where: { userId: req.user.id }, transaction });
       if (!driver || !booking.driverId || String(booking.driverId) !== String(driver.id)) {
+        await transaction.rollback();
         return res.status(403).json({
           success: false,
           message: 'Access denied. You are not assigned to this booking.',
@@ -372,6 +476,7 @@ const cancelBooking = async (req, res, next) => {
         });
       }
     } else if (req.user.role !== 'admin') {
+      await transaction.rollback();
       return res.status(403).json({
         success: false,
         message: 'Access denied. You are not authorized to cancel this booking.',
@@ -381,6 +486,7 @@ const cancelBooking = async (req, res, next) => {
 
     const currentStatus = (booking.status || '').toLowerCase();
     if (currentStatus === 'cancelled') {
+      await transaction.rollback();
       return res.status(200).json({
         success: true,
         message: 'Booking is already cancelled',
@@ -389,6 +495,7 @@ const cancelBooking = async (req, res, next) => {
     }
 
     if (!['pending', 'accepted', 'enroute'].includes(currentStatus)) {
+      await transaction.rollback();
       return res.status(400).json({
         success: false,
         message: `Cannot cancel a booking that is ${booking.status}`,
@@ -397,11 +504,16 @@ const cancelBooking = async (req, res, next) => {
     }
 
     booking.status = 'cancelled';
-    await booking.save();
+    await booking.save({ transaction });
 
     if (booking.ambulanceId) {
-      await Ambulance.update({ status: 'available' }, { where: { id: booking.ambulanceId } });
+      await Ambulance.update(
+        { status: 'available' },
+        { where: { id: booking.ambulanceId }, transaction }
+      );
     }
+
+    await transaction.commit();
 
     // Emit real-time status update to booking room & global channel for drivers
     const io = req.app.get('io');
@@ -423,6 +535,9 @@ const cancelBooking = async (req, res, next) => {
       data: { booking },
     });
   } catch (error) {
+    if (transaction && !transaction.finished) {
+      await transaction.rollback();
+    }
     next(error);
   }
 };

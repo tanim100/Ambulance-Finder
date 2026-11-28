@@ -472,6 +472,12 @@ export default function RequestPage() {
         const realId = res?.data?.booking?.id || res?.data?.id;
         if (realId) setBookingId(String(realId));
       } catch (backendErr) {
+        if (backendErr?.response?.status === 409) {
+          const errMsg = backendErr.response?.data?.message || 'Selected ambulance is currently busy or already booked. Please choose another ambulance.';
+          setErrors((prev) => ({ ...prev, ambulanceType: errMsg }));
+          setLoading(false);
+          return;
+        }
         console.warn('[Backend booking] using local ID:', backendErr?.message);
       }
 

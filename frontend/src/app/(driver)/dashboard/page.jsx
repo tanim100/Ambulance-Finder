@@ -111,6 +111,12 @@ export default function DriverDashboard() {
       await driverAPI.updateBookingStatus(reqId, 'Accepted');
     } catch (e) {
       console.warn('Accept booking error:', e);
+      if (e?.response?.status === 409) {
+        alert(e.response?.data?.message || 'This trip has already been accepted by another driver.');
+        setIncomingRequest(null);
+        setAccepting(false);
+        return;
+      }
     }
 
     setActiveTrip(incomingRequest);
