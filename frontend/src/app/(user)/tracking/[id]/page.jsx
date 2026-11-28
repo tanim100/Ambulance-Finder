@@ -792,10 +792,10 @@ export default function TrackingPage() {
       };
     }
     return {
-      pickupLat: patientPos ? patientPos.lat : 23.8282,
-      pickupLng: patientPos ? patientPos.lng : 90.4163,
-      driverLat: driverPos ? driverPos.lat : 23.8231,
-      driverLng: driverPos ? driverPos.lng : 90.4263,
+      pickupLat: patientPos ? patientPos.lat : 23.8103,
+      pickupLng: patientPos ? patientPos.lng : 90.4125,
+      driverLat: driverPos ? driverPos.lat : (patientPos ? patientPos.lat - 0.007 : 23.8033),
+      driverLng: driverPos ? driverPos.lng : (patientPos ? patientPos.lng + 0.008 : 90.4205),
       hospitalLocation: selectedHospital,
     };
   })();
@@ -907,7 +907,14 @@ export default function TrackingPage() {
                       : 'border-gray-200 bg-gray-50/50 hover:bg-gray-100 text-gray-700'
                   }`}
                 >
-                  <div className="font-bold truncate text-[11px] leading-tight">{h.shortName}</div>
+                  <div className="flex items-center justify-between gap-1">
+                    <span className="font-bold truncate text-[11px] leading-tight">{h.shortName}</span>
+                    {h.distance != null && (
+                      <span className="text-[9.5px] font-bold text-emerald-700 bg-emerald-100/70 px-1.5 py-0.5 rounded-full shrink-0">
+                        {h.distance} km
+                      </span>
+                    )}
+                  </div>
                   <div className="text-[10px] text-gray-400 truncate mt-1">{h.area.split(',')[0]}</div>
                   {isSelected && (
                     <span className="text-[9px] font-bold text-emerald-700 mt-1 inline-block">✓ Active Route</span>
@@ -1003,32 +1010,47 @@ export default function TrackingPage() {
           </div>
         </div>
 
-        {/* Live GPS Status Bar */}
-        <div className="bg-white rounded-xl px-4 py-2.5 border border-gray-200/80 shadow-xs flex flex-wrap items-center justify-between gap-3 text-xs">
-          <div className="flex items-center gap-2">
-            <span className="font-semibold text-emerald-600 flex items-center gap-1">
-              🟢 {liveStreamStatus.active ? `Live Driver GPS: ${liveStreamStatus.source}` : 'Connected to Live Driver GPS'}
+        {/* Live Telemetry HUD Bar */}
+        <div className="bg-white rounded-2xl p-3.5 border border-gray-200/80 shadow-xs space-y-2.5 text-xs">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <span className="font-bold text-emerald-700 flex items-center gap-1.5">
+              <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-ping" />
+              <span>{liveStreamStatus.active ? `Live Telemetry Active • ${liveStreamStatus.source}` : 'Connected to Live Ambulance & Patient GPS'}</span>
             </span>
-          </div>
-
-          <div className="flex items-center gap-3.5 text-gray-600 text-[11px]">
-            {driverPos && (
-              <span>
-                Ambulance: <strong className="font-mono text-gray-900">{driverPos.lat.toFixed(4)}, {driverPos.lng.toFixed(4)}</strong>
+            {liveStreamStatus.lastUpdated && (
+              <span className="text-[11px] font-mono text-gray-400">
+                Updated: {liveStreamStatus.lastUpdated}
               </span>
             )}
-            <span>
-              Target: <strong className="text-gray-900 font-bold">{tripPhase === 'pickup' ? 'Patient' : selectedHospital.shortName}</strong>
-            </span>
-            <span>
-              Distance: <strong className="text-gray-900 font-bold">{displayDistance}</strong>
-            </span>
-            <span>
-              ETA: <strong className="text-gray-900 font-bold">{displayETA}</strong>
-            </span>
-            <span>
-              Speed: <strong className="text-gray-900 font-bold">{liveStreamStatus.speed || 38} km/h</strong>
-            </span>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+            {/* Patient Live GPS */}
+            <div className="bg-blue-50/70 border border-blue-100 rounded-xl px-3 py-2">
+              <p className="text-[10px] font-bold text-blue-600 uppercase">📍 Patient Live GPS</p>
+              <p className="font-mono font-bold text-gray-900 text-[11.5px] mt-0.5">
+                {patientPos ? `${patientPos.lat.toFixed(4)}, ${patientPos.lng.toFixed(4)}` : 'Detecting...'}
+              </p>
+            </div>
+
+            {/* Ambulance Live GPS */}
+            <div className="bg-rose-50/70 border border-rose-100 rounded-xl px-3 py-2">
+              <p className="text-[10px] font-bold text-rose-600 uppercase">🚑 Ambulance Live GPS</p>
+              <p className="font-mono font-bold text-gray-900 text-[11.5px] mt-0.5">
+                {driverPos ? `${driverPos.lat.toFixed(4)}, ${driverPos.lng.toFixed(4)}` : 'Dispatching...'}
+                <span className="ml-1.5 text-emerald-700">• {liveStreamStatus.speed || 38} km/h</span>
+              </p>
+            </div>
+
+            {/* Target & Live ETA */}
+            <div className="bg-emerald-50/70 border border-emerald-100 rounded-xl px-3 py-2">
+              <p className="text-[10px] font-bold text-emerald-700 uppercase">
+                {tripPhase === 'pickup' ? '🎯 En Route to Patient' : `🏥 ${selectedHospital.shortName}`}
+              </p>
+              <p className="font-bold text-gray-900 text-[11.5px] mt-0.5">
+                {displayDistance} <span className="ml-1.5 text-emerald-700">• ETA: {displayETA}</span>
+              </p>
+            </div>
           </div>
         </div>
 

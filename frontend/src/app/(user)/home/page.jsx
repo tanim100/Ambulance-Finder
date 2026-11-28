@@ -37,11 +37,11 @@ export const generateNearbyAmbulances = (lat, lng, areaLabel = '') => {
   const userLng = typeof lng === 'number' ? lng : 90.4125;
 
   const baseUnits = [
-    { id: 'amb-1', num: 'AMB-001', type: 'Basic',    driver: 'Rahim Ahmed',  rating: 4.8, dLat:  0.0052, dLng: -0.0058 },
-    { id: 'amb-2', num: 'AMB-002', type: 'Advanced', driver: 'Karim Hossain', rating: 4.9, dLat: -0.0075, dLng:  0.0082 },
-    { id: 'amb-3', num: 'AMB-003', type: 'ICU',      driver: 'Jamal Uddin',  rating: 4.9, dLat:  0.0118, dLng:  0.0104 },
-    { id: 'amb-4', num: 'AMB-004', type: 'Basic',    driver: 'Sajid Mia',    rating: 4.7, dLat: -0.0132, dLng: -0.0115 },
-    { id: 'amb-5', num: 'AMB-005', type: 'Advanced', driver: 'Tanvir Hasan', rating: 4.8, dLat:  0.0158, dLng: -0.0142 },
+    { id: 'amb-1', num: 'AMB-001', type: 'Basic',    driver: 'Rahim Ahmed',  rating: 4.8, dLat:  0.0065, dLng: -0.0068 },
+    { id: 'amb-2', num: 'AMB-002', type: 'Advanced', driver: 'Karim Hossain', rating: 4.9, dLat: -0.0105, dLng:  0.0112 },
+    { id: 'amb-3', num: 'AMB-003', type: 'ICU',      driver: 'Jamal Uddin',  rating: 4.9, dLat:  0.0148, dLng:  0.0135 },
+    { id: 'amb-4', num: 'AMB-004', type: 'Basic',    driver: 'Sajid Mia',    rating: 4.7, dLat: -0.0185, dLng: -0.0165 },
+    { id: 'amb-5', num: 'AMB-005', type: 'Advanced', driver: 'Tanvir Hasan', rating: 4.8, dLat:  0.0225, dLng: -0.0210 },
   ];
 
   return baseUnits.map((u, idx) => {

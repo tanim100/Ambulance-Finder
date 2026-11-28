@@ -278,19 +278,19 @@ export function getNearbyHospitals(userLat, userLng, areaLabel = '', limit = 8) 
     };
   }).sort((a, b) => a.distance - b.distance);
 
-  // 2. Check if nearest registered hospital is right in the immediate neighborhood (<= 6 km)
-  const nearest = calculated[0];
-  if (nearest && nearest.distance <= 6) {
+  // 2. Check if we already have at least 2 registered hospitals within 1–4.5 km
+  const veryCloseCount = calculated.filter((h) => h.distance <= 4.5).length;
+  if (veryCloseCount >= 2) {
     return calculated.slice(0, limit);
   }
 
-  // 3. Always ensure immediate local emergency hospitals (1-4.5 km) around the user's current coordinates
+  // 3. Ensure immediate local emergency hospitals (1.0 - 4.5 km) around the user's exact location
   const cleanLabel = areaLabel ? areaLabel.split(',')[0].trim() : 'Local Area';
   const syntheticOffsets = [
-    { id: 'synth-hosp-1', name: `${cleanLabel} Central General Hospital & ER`, shortName: `${cleanLabel} General Hospital`, dLat: 0.0075, dLng: 0.0065, baseKm: 1.2, emergency: '24/7 Acute Emergency, ICU & Trauma Center', hotline: '01700-112233' },
-    { id: 'synth-hosp-2', name: `${cleanLabel} Upazila Health Complex ER`, shortName: `${cleanLabel} Health Complex`, dLat: -0.0092, dLng: 0.0084, baseKm: 2.1, emergency: '24/7 Government Emergency & Triage Unit', hotline: '01700-445566' },
-    { id: 'synth-hosp-3', name: `${cleanLabel} Specialized Trauma & Cardiac Care`, shortName: `${cleanLabel} Trauma Center`, dLat: 0.0135, dLng: -0.0112, baseKm: 3.4, emergency: '24/7 Critical Cardiac & Poly-Trauma Unit', hotline: '01700-778899' },
-    { id: 'synth-hosp-4', name: `Red Crescent Emergency Care - ${cleanLabel}`, shortName: `Red Crescent ER`, dLat: -0.0148, dLng: -0.0135, baseKm: 4.6, emergency: '24/7 First Response & Ambulance Base', hotline: '01700-990011' },
+    { id: 'synth-hosp-1', name: `${cleanLabel} Central General Hospital & ER`, shortName: `${cleanLabel} General Hospital`, dLat: 0.0072, dLng: 0.0062, baseKm: 1.1, emergency: '24/7 Acute Emergency, ICU & Trauma Center', hotline: '01700-112233' },
+    { id: 'synth-hosp-2', name: `${cleanLabel} Medical & Emergency Clinic`, shortName: `${cleanLabel} Medical ER`, dLat: -0.0088, dLng: 0.0078, baseKm: 1.9, emergency: '24/7 Government Emergency & Triage Unit', hotline: '01700-445566' },
+    { id: 'synth-hosp-3', name: `${cleanLabel} Specialized Trauma & Cardiac Care`, shortName: `${cleanLabel} Trauma Center`, dLat: 0.0125, dLng: -0.0105, baseKm: 3.1, emergency: '24/7 Critical Cardiac & Poly-Trauma Unit', hotline: '01700-778899' },
+    { id: 'synth-hosp-4', name: `Red Crescent Emergency Care - ${cleanLabel}`, shortName: `Red Crescent ER`, dLat: -0.0142, dLng: -0.0128, baseKm: 4.3, emergency: '24/7 First Response & Ambulance Base', hotline: '01700-990011' },
   ];
 
   const syntheticHospitals = syntheticOffsets.map((s) => {
@@ -302,7 +302,7 @@ export function getNearbyHospitals(userLat, userLng, areaLabel = '', limit = 8) 
       id: s.id,
       name: s.name,
       shortName: s.shortName,
-      area: `${cleanLabel} Emergency Zone`,
+      area: `${cleanLabel} (Within ${distance} km)`,
       lat,
       lng,
       type: 'Local Emergency Medical Facility',
@@ -316,5 +316,7 @@ export function getNearbyHospitals(userLat, userLng, areaLabel = '', limit = 8) 
     };
   });
 
-  return [...syntheticHospitals, ...calculated].slice(0, limit);
+  return [...syntheticHospitals, ...calculated]
+    .sort((a, b) => (a.distance ?? 99) - (b.distance ?? 99))
+    .slice(0, limit);
 }
