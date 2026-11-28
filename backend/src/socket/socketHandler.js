@@ -31,8 +31,36 @@ const socketHandler = (io) => {
      * Join a booking room to receive real-time updates for that booking
      * Client emits: { bookingId: string }
      */
-    socket.on('join:booking', ({ bookingId }) => {
+    socket.on('join:booking', async ({ bookingId }) => {
       if (!bookingId) return;
+
+      try {
+        const { Booking, Driver } = require('../models');
+        const booking = await Booking.findByPk(bookingId);
+        if (!booking) {
+          socket.emit('error', { message: 'Booking not found' });
+          return;
+        }
+
+        // Authorization check for socket room: Admin, booking owner, or assigned driver
+        if (socket.user?.role === 'user' && booking.userId !== socket.user.id) {
+          socket.emit('error', { message: 'Unauthorized access to booking room' });
+          return;
+        }
+
+        if (socket.user?.role === 'driver') {
+          const driver = await Driver.findOne({ where: { userId: socket.user.id } });
+          const isAssigned = driver && booking.driverId === driver.id;
+          const isPending = !booking.driverId && booking.status === 'pending';
+          if (!isAssigned && !isPending) {
+            socket.emit('error', { message: 'Unauthorized access to booking room' });
+            return;
+          }
+        }
+      } catch (err) {
+        console.error('Socket room auth error:', err.message);
+      }
+
       const room = `booking-${bookingId}`;
       socket.join(room);
       console.log(`Socket ${socket.id} joined room: ${room}`);

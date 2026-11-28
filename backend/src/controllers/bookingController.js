@@ -172,6 +172,34 @@ const getBookingById = async (req, res, next) => {
       });
     }
 
+    // Authorization check: User can only view their own booking, Driver can only view assigned or unassigned pending, Admin has full access
+    if (req.user.role === 'user') {
+      if (booking.userId !== req.user.id) {
+        return res.status(403).json({
+          success: false,
+          message: 'Access denied. You are not authorized to view this booking.',
+          data: null,
+        });
+      }
+    } else if (req.user.role === 'driver') {
+      const driver = await Driver.findOne({ where: { userId: req.user.id } });
+      const isAssigned = driver && booking.driverId === driver.id;
+      const isPendingUnassigned = !booking.driverId && booking.status === 'pending';
+      if (!isAssigned && !isPendingUnassigned) {
+        return res.status(403).json({
+          success: false,
+          message: 'Access denied. You are not authorized to view this booking.',
+          data: null,
+        });
+      }
+    } else if (req.user.role !== 'admin') {
+      return res.status(403).json({
+        success: false,
+        message: 'Access denied. You are not authorized to view this booking.',
+        data: null,
+      });
+    }
+
     return res.status(200).json({
       success: true,
       message: 'Booking retrieved successfully',
@@ -195,6 +223,42 @@ const updateBookingStatus = async (req, res, next) => {
       return res.status(404).json({
         success: false,
         message: 'Booking not found',
+        data: null,
+      });
+    }
+
+    // Authorization check: Only assigned driver or admin can update booking status
+    if (req.user.role === 'driver') {
+      const driver = await Driver.findOne({ where: { userId: req.user.id } });
+      if (!driver) {
+        return res.status(403).json({
+          success: false,
+          message: 'Access denied. Driver profile not found.',
+          data: null,
+        });
+      }
+
+      if (booking.driverId && booking.driverId !== driver.id) {
+        return res.status(403).json({
+          success: false,
+          message: 'Access denied. You are not assigned to this booking.',
+          data: null,
+        });
+      }
+
+      // If driver is accepting an unassigned booking, assign this driver
+      if (!booking.driverId && status === 'accepted') {
+        booking.driverId = driver.id;
+        const ambulance = await Ambulance.findOne({ where: { driverId: driver.id } });
+        if (ambulance) {
+          booking.ambulanceId = ambulance.id;
+          await ambulance.update({ status: 'busy' });
+        }
+      }
+    } else if (req.user.role !== 'admin') {
+      return res.status(403).json({
+        success: false,
+        message: 'Access denied. Driver or Admin privileges required.',
         data: null,
       });
     }
@@ -257,6 +321,32 @@ const cancelBooking = async (req, res, next) => {
       });
     }
 
+    // Authorization check: Only booking owner (user), assigned driver, or admin can cancel
+    if (req.user.role === 'user') {
+      if (booking.userId !== req.user.id) {
+        return res.status(403).json({
+          success: false,
+          message: 'Access denied. You are not authorized to cancel this booking.',
+          data: null,
+        });
+      }
+    } else if (req.user.role === 'driver') {
+      const driver = await Driver.findOne({ where: { userId: req.user.id } });
+      if (!driver || (booking.driverId && booking.driverId !== driver.id)) {
+        return res.status(403).json({
+          success: false,
+          message: 'Access denied. You are not assigned to this booking.',
+          data: null,
+        });
+      }
+    } else if (req.user.role !== 'admin') {
+      return res.status(403).json({
+        success: false,
+        message: 'Access denied. You are not authorized to cancel this booking.',
+        data: null,
+      });
+    }
+
     if (!['pending', 'accepted'].includes(booking.status)) {
       return res.status(400).json({
         success: false,
@@ -270,6 +360,16 @@ const cancelBooking = async (req, res, next) => {
 
     if (booking.ambulanceId) {
       await Ambulance.update({ status: 'available' }, { where: { id: booking.ambulanceId } });
+    }
+
+    // Emit real-time status update to booking room
+    const io = req.app.get('io');
+    if (io) {
+      io.to(`booking-${booking.id}`).emit('booking:status', {
+        bookingId: booking.id,
+        status: 'cancelled',
+        updatedAt: new Date().toISOString(),
+      });
     }
 
     return res.status(200).json({

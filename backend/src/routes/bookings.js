@@ -59,7 +59,24 @@ router.put(
   updateBookingStatus
 );
 
-// DELETE /api/bookings/:id/cancel — cancel booking (user)
+// PATCH /api/bookings/:id/status — update booking status (driver/admin)
+router.patch(
+  '/:id/status',
+  protect,
+  requireDriver,
+  [
+    body('status')
+      .isIn(['accepted', 'enroute', 'arrived', 'completed', 'cancelled'])
+      .withMessage('Valid status is required'),
+  ],
+  validate,
+  updateBookingStatus
+);
+
+// DELETE /api/bookings/:id/cancel — cancel booking (user/driver/admin)
 router.delete('/:id/cancel', protect, cancelBooking);
+
+// PATCH /api/bookings/:id/cancel — cancel booking (user/driver/admin)
+router.patch('/:id/cancel', protect, cancelBooking);
 
 module.exports = router;

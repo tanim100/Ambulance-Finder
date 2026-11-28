@@ -185,6 +185,7 @@ export default function TrackingPage() {
   }, [patientPos]);
 
   const [loading, setLoading] = useState(true);
+  const [authError, setAuthError] = useState(null);
   const [cancelling, setCancelling] = useState(false);
   const [liveStreamStatus, setLiveStreamStatus] = useState({
     active: false,
@@ -284,7 +285,13 @@ export default function TrackingPage() {
             reverseGeocodePickup(userGPS.lat, userGPS.lng);
           }
         }
-      } catch {
+      } catch (err) {
+        if (err.response?.status === 403) {
+          setAuthError(err.response?.data?.message || 'Access denied. You are not authorized to view or track this booking.');
+          setLoading(false);
+          return;
+        }
+
         let localBooking = null;
         try {
           const raw = localStorage.getItem('last_emergency_booking');
@@ -737,6 +744,36 @@ export default function TrackingPage() {
         <div className="text-center">
           <div className="w-12 h-12 border-3 border-gray-200 border-t-red-600 rounded-full animate-spin mx-auto mb-4" />
           <p className="text-sm text-gray-500 font-medium">Connecting to Live Ambulance GPS…</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (authError) {
+    return (
+      <div className="flex items-center justify-center min-h-screen bg-gray-50 px-4">
+        <div className="max-w-md w-full bg-white rounded-2xl p-6 border border-rose-100 shadow-xl text-center space-y-4">
+          <div className="w-16 h-16 bg-rose-50 text-rose-600 rounded-full flex items-center justify-center mx-auto">
+            <AlertCircle size={32} />
+          </div>
+          <h2 className="text-xl font-bold text-gray-900">Unauthorized Booking Access</h2>
+          <p className="text-sm text-gray-600">
+            {authError}
+          </p>
+          <div className="pt-2 flex flex-col sm:flex-row gap-3">
+            <Link
+              href="/home"
+              className="flex-1 py-2.5 px-4 rounded-xl bg-gray-100 hover:bg-gray-200 text-gray-700 text-sm font-semibold transition-colors"
+            >
+              Back to Home
+            </Link>
+            <Link
+              href="/request"
+              className="flex-1 py-2.5 px-4 rounded-xl bg-rose-600 hover:bg-rose-700 text-white text-sm font-semibold transition-colors shadow-md shadow-rose-200"
+            >
+              Request Ambulance
+            </Link>
+          </div>
         </div>
       </div>
     );
