@@ -147,8 +147,12 @@ export default function HomePage() {
             estimatedTime: item.estimatedTime || Math.max(3, Math.round((item.distance || 1) * 3.2)),
             hospital: item.hospital || 'Nearby Hospital ER',
           };
-        });
-        setAmbulances(formatted);
+        }).filter((a) => a.distance <= 15);
+        if (formatted.length >= 3) {
+          setAmbulances(formatted);
+        } else {
+          setAmbulances(generateNearbyAmbulances(location.lat, location.lng, location.label));
+        }
       } else {
         setAmbulances(generateNearbyAmbulances(location.lat, location.lng, location.label));
       }

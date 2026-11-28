@@ -401,8 +401,14 @@ function MapCenterController({ center, hasActiveRoute }) {
 }
 
 // ── Floating In-Map Controller Toolbar ──
-function MapControls({ driverLocation, route, tileStyle, onTileChange }) {
+function MapControls({ driverLocation, userLocation, route, tileStyle, onTileChange }) {
   const map = useMap();
+
+  const handleCenterUser = () => {
+    if (userLocation?.lat && userLocation?.lng) {
+      map.flyTo([userLocation.lat, userLocation.lng], 16, { animate: true, duration: 0.7 });
+    }
+  };
 
   const handleCenterAmbulance = () => {
     if (driverLocation?.lat && driverLocation?.lng) {
@@ -427,6 +433,19 @@ function MapControls({ driverLocation, route, tileStyle, onTileChange }) {
 
   return (
     <div className="absolute bottom-4 right-3 z-[1000] flex flex-col gap-1.5 select-none pointer-events-auto">
+      {/* Center on User / Patient Location */}
+      {userLocation?.lat && userLocation?.lng && (
+        <button
+          type="button"
+          onClick={handleCenterUser}
+          className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold bg-white/95 dark:bg-slate-900/95 text-blue-600 dark:text-blue-400 shadow-md border border-gray-200/90 dark:border-slate-700/90 hover:bg-blue-50 dark:hover:bg-slate-800 transition-all active:scale-95"
+          title="Center on My Location"
+        >
+          <span>📍</span>
+          <span>My Location</span>
+        </button>
+      )}
+
       {/* Re-center / Follow Ambulance (Only when active driver route exists) */}
       {driverLocation && route && route.length > 1 && (
         <button
@@ -575,6 +594,7 @@ export default function MapView({
         {/* Floating In-Map Camera & Tile Controls */}
         <MapControls
           driverLocation={driverLocation}
+          userLocation={effectiveUserLoc}
           route={route}
           tileStyle={tileStyle}
           onTileChange={setTileStyle}

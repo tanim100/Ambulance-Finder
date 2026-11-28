@@ -278,13 +278,13 @@ export function getNearbyHospitals(userLat, userLng, areaLabel = '', limit = 8) 
     };
   }).sort((a, b) => a.distance - b.distance);
 
-  // 2. Check if nearest hospital is within reasonable proximity (< 35 km)
+  // 2. Check if nearest registered hospital is right in the immediate neighborhood (<= 6 km)
   const nearest = calculated[0];
-  if (nearest && nearest.distance <= 35) {
+  if (nearest && nearest.distance <= 6) {
     return calculated.slice(0, limit);
   }
 
-  // 3. Fallback: If user is far away (e.g. another division/district), synthesize realistic nearby emergency hubs
+  // 3. Always ensure immediate local emergency hospitals (1-4.5 km) around the user's current coordinates
   const cleanLabel = areaLabel ? areaLabel.split(',')[0].trim() : 'Local Area';
   const syntheticOffsets = [
     { id: 'synth-hosp-1', name: `${cleanLabel} Central General Hospital & ER`, shortName: `${cleanLabel} General Hospital`, dLat: 0.0075, dLng: 0.0065, baseKm: 1.2, emergency: '24/7 Acute Emergency, ICU & Trauma Center', hotline: '01700-112233' },
@@ -316,5 +316,5 @@ export function getNearbyHospitals(userLat, userLng, areaLabel = '', limit = 8) 
     };
   });
 
-  return [...syntheticHospitals, ...calculated.slice(0, 3)].slice(0, limit);
+  return [...syntheticHospitals, ...calculated].slice(0, limit);
 }
