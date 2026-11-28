@@ -63,7 +63,54 @@ export default function DriverActivePage() {
   const [trip, setTrip] = useState({ ...ACTIVE_TRIP, _id: tripIdParam });
   const [updating, setUpdating] = useState(false);
   const [completed, setCompleted] = useState(false);
+  const [userLiveSyncedAt, setUserLiveSyncedAt] = useState(null);
+  const [roadRoute, setRoadRoute] = useState(null);
+  const lastRouteKeyRef = useRef('');
   const watchIdRef = useRef(null);
+
+  // Hydrate accepted trip details from localStorage immediately so real patient & hospital show before Firebase resolves
+  useEffect(() => {
+    try {
+      const rawDriverTrip = localStorage.getItem('driver_active_trip');
+      const rawBooking = localStorage.getItem('last_emergency_booking');
+      const parsed = rawDriverTrip ? JSON.parse(rawDriverTrip) : (rawBooking ? JSON.parse(rawBooking) : null);
+      if (parsed) {
+        const uLat = parsed.userLocation?.lat ?? parsed.pickupLat;
+        const uLng = parsed.userLocation?.lng ?? parsed.pickupLng;
+        const dHosp = parsed.destinationHospital || (parsed.destinationLat && parsed.destinationLng
+          ? { name: parsed.destination || 'Destination Hospital', lat: Number(parsed.destinationLat), lng: Number(parsed.destinationLng) }
+          : null);
+        setTrip((prev) => ({
+          ...prev,
+          _id: tripIdParam || parsed._id || parsed.id || prev._id,
+          status: parsed.status || prev.status,
+          patientName: parsed.patientName || prev.patientName,
+          emergencyType: parsed.emergencyType || prev.emergencyType,
+          ambulanceType: parsed.ambulanceType || prev.ambulanceType,
+          pickupLocation: parsed.pickupLocation || parsed.pickupAddress || prev.pickupLocation,
+          destination: parsed.destination || prev.destination,
+          destinationHospital: dHosp || prev.destinationHospital,
+          userPhone: parsed.userPhone || prev.userPhone,
+          userLocation: (uLat && uLng) ? { lat: Number(uLat), lng: Number(uLng) } : prev.userLocation,
+        }));
+        if (parsed.driverStart?.lat && parsed.driverStart?.lng && !hasRealGPS) {
+          setActiveLoc((prev) => ({
+            ...prev,
+            lat: Number(parsed.driverStart.lat),
+            lng: Number(parsed.driverStart.lng),
+            source: 'Dispatched Near Patient',
+          }));
+        } else if (uLat && uLng && !hasRealGPS) {
+          setActiveLoc((prev) => ({
+            ...prev,
+            lat: Number(uLat) - 0.007,
+            lng: Number(uLng) + 0.008,
+            source: 'Dispatched Near Patient',
+          }));
+        }
+      }
+    } catch {}
+  }, [tripIdParam]);
 
   // Driver current coordinates — start with Dhaka center; updated by real GPS
   const [activeLoc, setActiveLoc] = useState({
@@ -213,6 +260,7 @@ export default function DriverActivePage() {
           ...prev,
           userLocation: { lat: userLoc.lat, lng: userLoc.lng },
         }));
+        setUserLiveSyncedAt(new Date(userLoc.timestamp || Date.now()).toLocaleTimeString());
       }
     });
 
@@ -233,6 +281,34 @@ export default function DriverActivePage() {
       unsubHospital?.();
     };
   }, [tripIdParam]);
+
+  // Fetch turn-by-turn road route from OSRM for driver navigation (Driver -> Patient, or Driver -> Hospital)
+  useEffect(() => {
+    const isHosp = trip.status === 'Heading to Hospital';
+    const target = isHosp && trip.destinationHospital
+      ? { lat: trip.destinationHospital.lat, lng: trip.destinationHospital.lng }
+      : trip.userLocation;
+
+    if (!activeLoc?.lat || !activeLoc?.lng || !target?.lat || !target?.lng) return;
+
+    const key = `${isHosp ? 'h' : 'p'}_${activeLoc.lat.toFixed(3)}_${activeLoc.lng.toFixed(3)}_${target.lat.toFixed(3)}_${target.lng.toFixed(3)}`;
+    if (lastRouteKeyRef.current === key) return;
+    lastRouteKeyRef.current = key;
+
+    fetch(`https://router.project-osrm.org/route/v1/driving/${activeLoc.lng},${activeLoc.lat};${target.lng},${target.lat}?overview=full&geometries=geojson`)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data) => {
+        const coords = data?.routes?.[0]?.geometry?.coordinates;
+        if (Array.isArray(coords) && coords.length > 1) {
+          setRoadRoute(coords.map((c) => [c[1], c[0]]));
+        } else {
+          setRoadRoute([[activeLoc.lat, activeLoc.lng], [target.lat, target.lng]]);
+        }
+      })
+      .catch(() => {
+        setRoadRoute([[activeLoc.lat, activeLoc.lng], [target.lat, target.lng]]);
+      });
+  }, [activeLoc?.lat, activeLoc?.lng, trip.userLocation?.lat, trip.userLocation?.lng, trip.destinationHospital?.lat, trip.destinationHospital?.lng, trip.status]);
 
   // Update activeLoc whenever device hardware GPS or location arrives
   useEffect(() => {
@@ -571,6 +647,12 @@ export default function DriverActivePage() {
             )}
           </button>
           <Badge status={trip.emergencyType.toLowerCase()} label={trip.emergencyType} />
+          {userLiveSyncedAt && (
+            <span className="hidden sm:inline-flex items-center gap-1 text-[10px] font-bold bg-blue-50 text-blue-700 border border-blue-200 px-2 py-0.5 rounded-full">
+              <span className="w-1.5 h-1.5 rounded-full bg-blue-600 animate-ping" />
+              User GPS Live ({userLiveSyncedAt})
+            </span>
+          )}
         </div>
       </div>
 
@@ -586,7 +668,9 @@ export default function DriverActivePage() {
             phaseKey={trip.status}
             onLocationSelect={handleMapClick}
             route={
-              trip.status === 'Heading to Hospital' && trip.destinationHospital
+              roadRoute && roadRoute.length > 1
+                ? roadRoute
+                : trip.status === 'Heading to Hospital' && trip.destinationHospital
                 ? [[activeLoc.lat, activeLoc.lng], [trip.destinationHospital.lat, trip.destinationHospital.lng]]
                 : activeLoc && trip.userLocation
                 ? [[activeLoc.lat, activeLoc.lng], [trip.userLocation.lat, trip.userLocation.lng]]

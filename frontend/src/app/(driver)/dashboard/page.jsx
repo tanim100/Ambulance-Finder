@@ -43,12 +43,47 @@ export default function DriverDashboard() {
     };
   }, [on, off]);
 
-  // Real Firebase Realtime Database listener for incoming requests
+  // Real Firebase Realtime Database + localStorage fallback listener for incoming requests
   useEffect(() => {
     if (!isOnline) {
       setIncomingRequest(null);
       return;
     }
+
+    const loadLocalFallbackRequest = () => {
+      try {
+        const raw = localStorage.getItem('last_emergency_booking');
+        if (!raw) return;
+        const b = JSON.parse(raw);
+        if (b && b.id && !activeTrip) {
+          setIncomingRequest((prev) => prev || {
+            _id: b.id,
+            requestId: b.id,
+            patientName: b.patientName || 'Emergency Patient',
+            emergencyType: b.emergencyType || 'general',
+            requestMode: b.requestMode || (b.emergencyType === 'general' ? 'general' : 'emergency'),
+            estimatedFare: b.estimatedFare || null,
+            scheduledTime: b.scheduledTime || null,
+            pickupLocation: b.pickupAddress || 'Patient Live Location',
+            pickupCoords: { lat: Number(b.pickupLat || 23.8103), lng: Number(b.pickupLng || 90.4125) },
+            destination: b.destination || 'Nearest Emergency Hospital',
+            destinationCoords: (b.destinationLat && b.destinationLng)
+              ? { lat: Number(b.destinationLat), lng: Number(b.destinationLng) }
+              : null,
+            estimatedDistance: 1.4,
+            ambulanceType: b.ambulanceType || 'Basic',
+            user: { phone: b.phone || '+880 1700-000000' },
+            notes: b.notes || '',
+          });
+        }
+      } catch {}
+    };
+
+    loadLocalFallbackRequest();
+    const onStorage = (e) => {
+      if (e.key === 'last_emergency_booking') loadLocalFallbackRequest();
+    };
+    window.addEventListener('storage', onStorage);
 
     const unsubFirebase = subscribeToPendingRequests((requests) => {
       if (requests && requests.length > 0 && !activeTrip) {
@@ -64,6 +99,9 @@ export default function DriverDashboard() {
           pickupLocation: topReq.pickup?.address || 'Current Patient Location',
           pickupCoords: { lat: topReq.pickup?.lat || 23.8282, lng: topReq.pickup?.lng || 90.4163 },
           destination: topReq.destination?.name || 'Nearest General Hospital',
+          destinationCoords: (topReq.destination?.lat && topReq.destination?.lng)
+            ? { lat: Number(topReq.destination.lat), lng: Number(topReq.destination.lng) }
+            : null,
           estimatedDistance: 1.8,
           ambulanceType: topReq.patientDetails?.ambulanceType || 'Basic Life Support',
           user: { phone: topReq.patientDetails?.phone || '+880 1700-000000' },
@@ -72,7 +110,10 @@ export default function DriverDashboard() {
       }
     });
 
-    return () => unsubFirebase();
+    return () => {
+      window.removeEventListener('storage', onStorage);
+      unsubFirebase();
+    };
   }, [isOnline, activeTrip]);
 
   const handleToggleOnline = async () => {
@@ -95,6 +136,26 @@ export default function DriverDashboard() {
     const pLng = incomingRequest.pickupCoords?.lng;
     const driverStartLat = typeof pLat === 'number' ? Number((pLat - 0.0075).toFixed(6)) : 23.8231;
     const driverStartLng = typeof pLng === 'number' ? Number((pLng + 0.0085).toFixed(6)) : 90.4263;
+
+    try {
+      localStorage.setItem('driver_active_trip', JSON.stringify({
+        _id: reqId,
+        status: 'Accepted',
+        patientName: incomingRequest.patientName,
+        emergencyType: incomingRequest.emergencyType,
+        requestMode: incomingRequest.requestMode,
+        estimatedFare: incomingRequest.estimatedFare,
+        ambulanceType: incomingRequest.ambulanceType,
+        pickupLocation: incomingRequest.pickupLocation,
+        userLocation: incomingRequest.pickupCoords || { lat: driverStartLat + 0.0075, lng: driverStartLng - 0.0085 },
+        destination: incomingRequest.destination,
+        destinationHospital: incomingRequest.destinationCoords
+          ? { name: incomingRequest.destination, lat: incomingRequest.destinationCoords.lat, lng: incomingRequest.destinationCoords.lng }
+          : null,
+        userPhone: incomingRequest.user?.phone || '+880 1700-000000',
+        driverStart: { lat: driverStartLat, lng: driverStartLng },
+      }));
+    } catch {}
 
     try {
       // Roadmap Step 4: Driver accepts request via transaction using local coordinates near patient
